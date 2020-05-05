@@ -54,7 +54,7 @@ class TypeCheck(BaseVisitor):
             self.visit(stmt)
         self.env = self.env.enclosing
 
-    def visit_function(self, node):
+    def visit_function_def(self, node):
         self.env = Environment(enclosing=self.env)
         for p in node.parameters:
             self.env.declare_var(p.name, p.type)
@@ -154,3 +154,4 @@ class TypeCheck(BaseVisitor):
             return Type.FLOAT
         else:
             return e_type
+

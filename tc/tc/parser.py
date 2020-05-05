@@ -36,7 +36,7 @@ class ForStmt:
         self.body = body
 
 
-class Function:
+class FunctionDef:
     def __init__(self, name, parameters, return_type, body):
         self.name = name
         self.parameters = parameters
@@ -263,7 +263,7 @@ class Parser:
             return_type = Type.UNIT
         else:
             return_type = Type(p[6])
-        p[0] = Function(name=p[2], parameters=[], return_type=return_type, body=p[7])
+        p[0] = FunctionDef(name=p[2], parameters=[], return_type=return_type, body=p[7])
 
     @staticmethod
     def p_function_declaration(p):
@@ -276,7 +276,7 @@ class Parser:
         else:
             return_type = Type(p[7])
             body = p[8]
-        p[0] = Function(name=p[2], parameters=p[4], return_type=return_type, body=body)
+        p[0] = FunctionDef(name=p[2], parameters=p[4], return_type=return_type, body=body)
 
     @staticmethod
     def p_params(p):

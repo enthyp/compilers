@@ -25,9 +25,30 @@ class BaseVisitor:
 
 
 class Callable:
-    def __init__(self, params, body):
+    def call(self, arguments):
+        raise NotImplementedError
+
+
+class Function(Callable):
+    def __init__(self, params, body, closure):
         self.params = params
         self.body = body
+        self.closure = closure
+
+    def call(self, evaluator, args):
+        prev_env = evaluator.env
+        evaluator.env = Environment(enclosing=self.closure)
+        arguments = [evaluator.visit(a) for a in args]
+
+        for p, a in zip(self.params, arguments):
+            evaluator.env.declare_var(p.name, a)
+
+        try:
+            evaluator.visit(self.body)
+        except evaluator.ReturnValue as r:
+            return r.val
+        finally:
+            evaluator.env = prev_env
 
 
 class Environment:
@@ -86,7 +107,7 @@ class PrettyPrinter(BaseVisitor):
     def visit_block(self, node):
         return self.add_viz_node(node, 'block', ['statements'])
 
-    def visit_function(self, node):
+    def visit_function_def(self, node):
         return self.add_viz_node(node, f'definition of {node.name}', ['body', 'parameters'])
 
     def visit_parameter(self, node):

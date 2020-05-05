@@ -3,7 +3,7 @@ import operator
 import re
 from tc.parser import Parser
 from tc.typecheck import TypeCheck
-from tc.util import BaseVisitor, Callable, Environment, PrettyPrinter
+from tc.util import BaseVisitor, Function, Environment, PrettyPrinter
 
 
 # AST evaluation.
@@ -44,11 +44,11 @@ class Evaluator(BaseVisitor):
             self.visit(stmt)
         self.env = self.env.enclosing
 
-    def visit_function(self, node):
+    def visit_function_def(self, node):
         try:
             self.resolve_fun(node.name, locally=True)
         except:
-            self.env.define_fun(node.name, Callable(node.parameters, node.body))
+            self.env.define_fun(node.name, Function(node.parameters, node.body, self.env))
         else:
             raise Exception(f'Function {node.name} defined twice!')
 
@@ -108,20 +108,7 @@ class Evaluator(BaseVisitor):
 
     def visit_call(self, node):
         function = self.env.resolve_fun(node.name)
-        self.env = Environment(enclosing=self.env)
-        params = function.params  # list of Parameter objects
-
-        arguments = [self.visit(a) for a in node.args]
-        for p, a in zip(params, arguments):
-            self.env.declare_var(p.name, a)
-
-        try:
-            self.visit(function.body)
-        except Evaluator.ReturnValue as r:
-            self.env = self.env.enclosing
-            return r.val
-        else:
-            self.env = self.env.enclosing
+        return function.call(self, node.args)
 
     def visit_variable(self, node):
         return self.env.resolve_var(node.name)
