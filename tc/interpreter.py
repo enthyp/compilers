@@ -1,0 +1,144 @@
+import math
+import operator
+import re
+from tc.parser import Parser
+from tc.typecheck import TypeCheck
+from tc.util import BaseVisitor, Callable, Environment, PrettyPrinter
+
+
+# AST evaluation.
+class Evaluator(BaseVisitor):
+    """Visitor of abstract syntax tree nodes."""
+
+    operators = {
+        '+': operator.add,
+        '-': operator.sub,
+        '*': operator.mul,
+        '/': operator.truediv,
+        '^': operator.pow,
+        '==': operator.eq,
+        '!=': operator.ne,
+        '>': operator.gt,
+        '>=': operator.ge,
+        '<=': operator.le,
+        '<': operator.lt,
+    }
+    unary_operators = {
+        '-': operator.neg,
+        'itof': float
+    }
+
+    def __init__(self):
+        self.env = Environment(None)
+
+    def reset(self):
+        self.env = Environment(None)
+
+    def run(self, statements):
+        for stmt in statements:
+            self.visit(stmt)
+
+    def visit_block(self, node):
+        self.env = Environment(enclosing=self.env)
+        for stmt in node.statements:
+            self.visit(stmt)
+        self.env = self.env.enclosing
+
+    def visit_function(self, node):
+        self.env.define_fun(node.name, Callable(node.parameters, node.body))
+
+    def visit_print_stmt(self, node):
+        print(self.visit(node.expr))
+
+    def visit_variable_declaration(self, node):
+        try:
+            self.env.resolve_var(node.name)
+        except:
+            value = self.visit(node.value)
+            self.env.declare_var(node.name, value)
+        else:
+            raise Exception(f'Variable {node.name} declared twice!')
+
+    def visit_assignment(self, node):
+        self.env.resolve_var(node.name)
+        value = self.visit(node.value)
+        self.env.define_var(node.name, value)
+ 
+    def visit_if_stmt(self, node):
+        if self.visit(node.condition):
+            self.visit(node.body)
+
+    def visit_while_stmt(self, node):
+        while self.visit(node.condition):
+            self.visit(node.body)
+    
+    def visit_for_stmt(self, node):
+        self.env = Environment(enclosing=self.env)
+
+        self.visit(node.initializer)
+        while self.visit(node.condition):
+            self.visit(node.body)
+            self.visit(node.increment)
+
+        self.env = self.env.enclosing
+
+    def visit_binary_expr(self, node):
+        op = self.operators[node.op]
+        lval = self.visit(node.left)
+        rval = self.visit(node.right)
+        return op(lval, rval)
+
+    def visit_unary_expr(self, node):
+        op = self.unary_operators[node.op]
+        return op(self.visit(node.expr))
+
+    class ReturnValue(Exception):
+        def __init__(self, val):
+            super()
+            self.val = val
+
+    def visit_return_stmt(self, node):
+        value = self.visit(node.expr)
+        raise Evaluator.ReturnValue(value)
+
+    def visit_call(self, node):
+        function = self.env.resolve_fun(node.name)
+        self.env = Environment(enclosing=self.env)
+        params = function.params  # list of Parameter objects
+
+        arguments = [self.visit(a) for a in node.args]
+        for p, a in zip(params, arguments):
+            self.env.declare_var(p.name, a)
+
+        try:
+            self.visit(function.body)
+        except Evaluator.ReturnValue as r:
+            self.env = self.env.enclosing
+            return r.val
+        else:
+            self.env = self.env.enclosing
+
+    def visit_variable(self, node):
+        return self.env.resolve_var(node.name)
+
+    @staticmethod
+    def visit_literal(node):
+        return node.value
+
+
+class Interpreter:
+    def __init__(self):
+        self.parser = Parser()
+        self.eval = Evaluator()
+        self.typecheck = TypeCheck()
+
+    def reset(self):
+        self.eval.reset()
+        self.typecheck.reset()
+
+    def run(self, program):
+        ast = self.parser.run(program)
+        self.typecheck.run(ast)
+        self.eval.run(ast)
+        self.reset()
+
