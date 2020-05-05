@@ -31,7 +31,7 @@ example_overloading = """
 """
 example_int_to_float = """
     var x : int = 1 -;
-    var y : float = x inttofloat;
+    var y : float = tofloat(x);
     print y 
 """
 example_function = """

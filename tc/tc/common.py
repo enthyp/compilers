@@ -1,4 +1,5 @@
 import re
+from enum import Enum
 from graphviz import Digraph
 from uuid import uuid4
 
@@ -24,8 +25,43 @@ class BaseVisitor:
         raise Exception('No such method: {}!'.format(m_name))
 
 
+class Type(Enum):
+    BOOL = 'bool'
+    INT = 'int'
+    FLOAT = 'float'
+    STRING = 'string'
+    UNIT = 'unit'
+
+
+class CallableSignature:
+    def __init__(self, param_types, return_type):
+        self.param_types = param_types
+        self.return_type = return_type
+
+    def verify(self, arg_types):
+        for p_t, a_t in zip(self.param_types, arg_types):
+            if p_t != a_t:
+                raise TypeError(f'Type mismatch in call: expected {p_t}, given {a_t}')
+        else:
+            return self.return_type
+
+
+class PolyCallableSignature(CallableSignature):
+    def __init__(self, signatures): 
+        self.signatures = signatures
+
+    def verify(self, arg_types):
+        for sig in self.signatures:
+            try:
+                return sig.verify(arg_types)
+            except TypeError:
+                continue
+        else:
+            raise TypeError('No signatures matched for polymorphic call')
+
+
 class Callable:
-    def call(self, arguments):
+    def call(self, evaluator, arguments):
         raise NotImplementedError
 
 
@@ -165,3 +201,4 @@ class PrettyPrinter(BaseVisitor):
             else:
                 self.graph.edge(n_id, self.visit(field), label='')
         return n_id
+

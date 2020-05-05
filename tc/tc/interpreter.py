@@ -1,12 +1,13 @@
 import math
 import operator
 import re
+from tc.globals import global_env
 from tc.parser import Parser
 from tc.typecheck import TypeCheck
-from tc.util import BaseVisitor, Function, Environment, PrettyPrinter
+from tc.common import BaseVisitor, Environment, Function, PrettyPrinter
 
 
-# AST evaluation.
+# AST evaluation
 class Evaluator(BaseVisitor):
     """Visitor of abstract syntax tree nodes."""
 
@@ -25,14 +26,13 @@ class Evaluator(BaseVisitor):
     }
     unary_operators = {
         '-': operator.neg,
-        'itof': float
     }
 
     def __init__(self):
-        self.env = Environment(None)
+        self.env = global_env()
 
     def reset(self):
-        self.env = Environment(None)
+        self.env = global_env()
 
     def run(self, statements):
         for stmt in statements:
@@ -130,8 +130,7 @@ class Interpreter:
 
     def run(self, program):
         ast = self.parser.run(program)
-        if ast:
-            self.typecheck.run(ast)
-            self.eval.run(ast)
-            self.reset()
+        self.typecheck.run(ast)
+        self.eval.run(ast)
+        self.reset()
 

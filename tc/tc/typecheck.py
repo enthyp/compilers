@@ -1,48 +1,62 @@
 from enum import Enum
-from tc.util import BaseVisitor, Environment
+from tc.globals import global_env
+from tc.common import BaseVisitor, Callable, CallableSignature, Environment, PolyCallableSignature, Type
 
 
-class Type(Enum):
-    BOOL = 'bool'
-    INT = 'int'
-    FLOAT = 'float'
-    STRING = 'string'
-    UNIT = 'unit'
-
-
-op_types = {
-    '+': [Type.INT, Type.FLOAT, Type.STRING],
-    '-': [Type.INT, Type.FLOAT],
-    '*': [Type.INT, Type.FLOAT],
-    '/': [Type.INT, Type.FLOAT],
-    '^': [Type.INT, Type.FLOAT],
+binary_signatures = {
+    (Type.INT, Type.INT): {
+        '+': Type.INT, 
+        '-': Type.INT, 
+        '*': Type.INT,
+        '^': Type.INT,
+        '==': Type.BOOL, 
+        '!=': Type.BOOL, 
+        '<': Type.BOOL, 
+        '<=': Type.BOOL, 
+        '>': Type.BOOL, 
+        '>=': Type.BOOL
+    },
+    (Type.FLOAT, Type.FLOAT): {
+        '+': Type.FLOAT, 
+        '-': Type.FLOAT, 
+        '*': Type.FLOAT,
+        '/': Type.FLOAT,
+        '^': Type.FLOAT,
+        '==': Type.BOOL, 
+        '!=': Type.BOOL, 
+        '<': Type.BOOL, 
+        '<=': Type.BOOL, 
+        '>': Type.BOOL, 
+        '>=': Type.BOOL
+    }, 
+    (Type.BOOL, Type.BOOL): {
+        '==': Type.BOOL,
+        '!=': Type.BOOL
+    }, 
+    (Type.STRING, Type.STRING): {
+        '+': Type.STRING,
+        '==': Type.BOOL,
+        '!=': Type.BOOL
+    }
 }
-unary_op_types = {
-    '-': [Type.INT, Type.FLOAT],
-    'itof': [Type.INT]
-}
-logical_op_types = {
-    '==': [Type.INT, Type.FLOAT, Type.STRING, Type.BOOL],
-    '!=': [Type.INT, Type.FLOAT, Type.STRING, Type.BOOL],
-    '>': [Type.INT, Type.FLOAT],
-    '>=': [Type.INT, Type.FLOAT],
-    '<=': [Type.INT, Type.FLOAT],
-    '<': [Type.INT, Type.FLOAT],
-}
 
-
-class CallableSignature:
-    def __init__(self, param_types, return_type):
-        self.param_types = param_types
-        self.return_type = return_type
+unary_signatures = {
+    Type.INT: {
+        '-': Type.INT,
+        'itof': Type.FLOAT
+    },
+    Type.FLOAT: {
+        '-': Type.FLOAT
+    } 
+}
 
 
 class TypeCheck(BaseVisitor):
     def __init__(self):
-        self.env = Environment(enclosing=None)
+        self.env = global_env()
 
     def reset(self):
-        self.env = Environment(enclosing=None)
+        self.env = global_env()
 
     def run(self, statements):
         for stmt in statements:
@@ -64,14 +78,18 @@ class TypeCheck(BaseVisitor):
         except TypeCheck.ReturnType as r:
             self.env = self.env.enclosing
             return_type = r.type
-        except:
-            raise Exception("Types don't match.")  # TODO: improve
         else:
             self.env = self.env.enclosing
             return_type = Type.UNIT
 
         param_types = [p.type for p in node.parameters]
-        self.env.define_fun(node.name, CallableSignature(param_types, return_type))
+
+        fun = Callable()  # dummy for uniformity 
+        fun.signature = CallableSignature(param_types, return_type)
+        self.env.define_fun(node.name, fun)
+
+    def visit_print_stmt(self, node):
+        self.visit(node.expr)
 
     def visit_variable_declaration(self, node):
         if node.value:
@@ -120,13 +138,9 @@ class TypeCheck(BaseVisitor):
         raise TypeCheck.ReturnType(type)
 
     def visit_call(self, node):
-        signature = self.env.resolve_fun(node.name)
+        signature = self.env.resolve_fun(node.name).signature
         arg_types = [self.visit(a) for a in node.args]
-
-        assert all([
-            a_type == p_type for a_type, p_type in zip(arg_types, signature.param_types)
-        ])
-        return signature.return_type
+        return signature.verify(arg_types)
 
     def visit_variable(self, node):
         return self.env.resolve_var(node.name)
@@ -140,18 +154,19 @@ class TypeCheck(BaseVisitor):
 
     @staticmethod
     def check_binary(l_type, r_type, op):
-        if op in op_types:
-            assert l_type in op_types[op] and r_type in op_types[op]
-            return l_type
-        else:
-            assert l_type in logical_op_types[op] and r_type in logical_op_types[op]
-            return Type.BOOL
+        try:
+            assert (l_type, r_type) in binary_signatures
+            assert op in binary_signatures[(l_type, r_type)]
+            return binary_signatures[(l_type, r_type)][op]
+        except AssertionError:
+            raise Exception(f'Incorrect types for operator: {l_type} {r_type} {op}')
 
     @staticmethod
     def check_unary(e_type, op):
-        assert e_type in unary_op_types[op]
-        if op == 'itof':  # TODO: improve
-            return Type.FLOAT
-        else:
-            return e_type
+        try:
+            assert e_type in unary_signatures
+            assert op in unary_signatures[e_type]
+            return unary_signatures[e_type][op]
+        except AssertionError:
+            raise Exception(f'Incorrect type for operator: {e_type} {op}')
 

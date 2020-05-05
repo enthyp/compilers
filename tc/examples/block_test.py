@@ -40,7 +40,7 @@ nested_fun = """
         
         # Multiplies by 3
         def fun(y: int) {
-            print 'Called inner fun with y = ' y +;   # TODO
+            print 'Called inner fun with y = ' tostring(y) +;
             return x y *
         }
 

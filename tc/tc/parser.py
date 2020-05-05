@@ -1,6 +1,6 @@
 import ply.lex as lex
 import ply.yacc as yacc
-from tc.typecheck import Type
+from tc.common import Type
 
 
 # All possible nodes of the abstract syntax tree.
@@ -139,12 +139,6 @@ class Parser:
     t_LEQ = r'<='
     t_GE = r'>'
     t_GEQ = r'>='
-
-    @staticmethod
-    def t_ITOF(t):
-        r"""inttofloat"""
-        t.value = 'itof'
-        return t
 
     @staticmethod
     def t_FLOAT(t):
@@ -385,11 +379,6 @@ class Parser:
     def p_expr_uminus(p):
         """expr : expr '-'"""
         p[0] = UnaryExpr(operator='-', expr=p[1])
-
-    @staticmethod
-    def p_expr_inttofloat(p):
-        """expr : expr ITOF"""
-        p[0] = UnaryExpr(operator='itof', expr=p[1])
 
     @staticmethod
     def p_expr_var_value(p):
