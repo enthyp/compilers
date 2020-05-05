@@ -45,14 +45,19 @@ class Evaluator(BaseVisitor):
         self.env = self.env.enclosing
 
     def visit_function(self, node):
-        self.env.define_fun(node.name, Callable(node.parameters, node.body))
+        try:
+            self.resolve_fun(node.name, locally=True)
+        except:
+            self.env.define_fun(node.name, Callable(node.parameters, node.body))
+        else:
+            raise Exception(f'Function {node.name} defined twice!')
 
     def visit_print_stmt(self, node):
         print(self.visit(node.expr))
 
     def visit_variable_declaration(self, node):
         try:
-            self.env.resolve_var(node.name)
+            self.env.resolve_var(node.name, locally=True)
         except:
             value = self.visit(node.value)
             self.env.declare_var(node.name, value)
@@ -138,7 +143,8 @@ class Interpreter:
 
     def run(self, program):
         ast = self.parser.run(program)
-        self.typecheck.run(ast)
-        self.eval.run(ast)
-        self.reset()
+        if ast:
+            self.typecheck.run(ast)
+            self.eval.run(ast)
+            self.reset()
 

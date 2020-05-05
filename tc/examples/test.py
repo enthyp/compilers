@@ -37,7 +37,7 @@ example_int_to_float = """
 example_function = """
     def sayHello(name : string) {
         print 'Hello, ' name +
-    };
+    }
     
     sayHello('good man.')
 """
@@ -54,9 +54,9 @@ example_fib = """
             a = b;
             b = tmp b +;
             i = i 1 +
-        };
+        }
         return b
-    };
+    }
     
     print fib(n)
 """

@@ -110,7 +110,10 @@ class Parser:
     def run(self, input):
         return self.yacc_parser.parse(input, debug=self.debug)
 
-    # Lexing rules.
+    ###
+    # LEXING
+    ###
+
     tokens = [
         'INT', 'FLOAT', 'BOOL', 'STRING',
         'EQ', 'NEQ', 'LE', 'LEQ', 'GE', 'GEQ', 'ITOF',
@@ -171,6 +174,10 @@ class Parser:
         t.type = self.reserved.get(t.value, 'IDENT')
         return t
 
+    @staticmethod
+    def t_COMMENT(t):
+        r'\#.*\n'
+
     t_ignore = ' \t\n'
 
     @staticmethod
@@ -178,18 +185,49 @@ class Parser:
         print("Illegal character '%s'" % t.value[0])
         t.lexer.skip(1)
 
-    # Parsing.
+    ###
+    # PARSING
+    ###
+
     # A program is a list of statements.
     @staticmethod
     def p_statements(p):
-        """statements : statements ';' statement
+        """statements : inner_statements statement
+                      | inner_statements ns_statement 
                       | statement
+                      | ns_statement
         """
-        if len(p) == 4:
-            p[1].append(p[3])
+        if len(p) == 3:
+            if p[2]:
+                p[1].append(p[2])
             p[0] = p[1]
         else:
-            p[0] = [p[1]]
+            p[0] = [p[1]] if p[1] else []
+
+    @staticmethod
+    def p_inner_stmt(p):
+        """inner_statements : inner_statements statement ';'
+                            | statement ';'
+        """
+        if len(p) == 4:
+            if p[2]:
+                p[1].append(p[2])
+            p[0] = p[1]
+        else:
+            p[0] = [p[1]] if p[1] else []
+
+    @staticmethod
+    # A statement (like block or function declaration) without delimiting semicolon.
+    def p_inner_block(p):
+        """inner_statements : inner_statements ns_statement
+                            | ns_statement
+        """
+        if len(p) == 3:
+            if p[2]:
+                p[1].append(p[2])
+            p[0] = p[1]
+        else:
+            p[0] = [p[1]] if p[1] else []
 
     @staticmethod
     def p_statements_err(p):
@@ -198,8 +236,12 @@ class Parser:
         raise Exception
 
     @staticmethod
+    def p_stmt_empty(p):
+        """statement : """
+
+    @staticmethod
     def p_stmt_block(p):
-        """statement : block"""
+        """ns_statement : block"""
         p[0] = p[1]
 
     @staticmethod
@@ -214,8 +256,8 @@ class Parser:
 
     @staticmethod
     def p_function_declaration_noarg(p):
-        """statement : FUNCTION IDENT '(' ')' ':' IDENT block
-                     | FUNCTION IDENT '(' ')' block
+        """ns_statement : FUNCTION IDENT '(' ')' ':' IDENT block
+                        | FUNCTION IDENT '(' ')' block
         """
         if len(p) == 5:
             return_type = Type.UNIT
@@ -225,8 +267,8 @@ class Parser:
 
     @staticmethod
     def p_function_declaration(p):
-        """statement : FUNCTION IDENT '(' params ')' ':' IDENT block
-                     | FUNCTION IDENT '(' params ')' block
+        """ns_statement : FUNCTION IDENT '(' params ')' ':' IDENT block
+                        | FUNCTION IDENT '(' params ')' block
         """
         if len(p) == 7:
             return_type = Type.UNIT
@@ -275,17 +317,17 @@ class Parser:
 
     @staticmethod
     def p_if_stmt(p):
-        """statement : IF '(' expr ')' block"""
+        """ns_statement : IF '(' expr ')' block"""
         p[0] = IfStmt(condition=p[3], body=p[5])
 
     @staticmethod
     def p_while_stmt(p):
-        """statement : WHILE '(' expr ')' block"""
+        """ns_statement : WHILE '(' expr ')' block"""
         p[0] = WhileStmt(condition=p[3], body=p[5])
 
     @staticmethod
     def p_for_stmt(p):
-        """statement : FOR '(' statement ';' expr ';' statement ')' block"""
+        """ns_statement : FOR '(' statement ';' expr ';' statement ')' block"""
         p[0] = ForStmt(initializer=p[3], condition=p[5], increment=p[7], body=p[9])
 
     @staticmethod
@@ -373,3 +415,4 @@ class Parser:
     def p_expr_string(p):
         """expr : STRING"""
         p[0] = Literal(value=p[1], type=Type.STRING)
+
