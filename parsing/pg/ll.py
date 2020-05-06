@@ -6,6 +6,10 @@ class ConflictError(Exception):
     """Conflict in parsing table - non LL(1) grammar."""
 
 
+class InputError(Exception):
+    """Incorrect input string."""
+
+
 def insert(table, non_terminal, terminal, num_prod):
     if terminal in table[non_terminal]:
         cur_num_prod = table[non_terminal][terminal]
@@ -42,5 +46,38 @@ def build_table(grammar):
 
 class LLParser:
     def __init__(self, grammar):
+        self.grammar = grammar
         self.table = build_table(grammar)
+
+    def run(self, string):
+        stack = [self.grammar.start]
+        derivation = []
+        
+        pos = 0
+        while pos < len(string):
+            t, N = string[pos], stack[-1]
+
+            if N in self.grammar.terminals:
+                if t != N:
+                    raise InputError(f'Error at {pos}: terminal mismatch, in: {t}, expected: {N}') 
+                stack.pop()
+                pos += 1
+            else:
+                num_prod = self.table[N].get(t, None)
+                if num_prod is None:
+                    raise InputError(f'Error at {pos}: no matching production for input {t} and non-terminal {N}')                
+                
+                self.apply(stack, self.grammar.productions[num_prod])
+                derivation.append(num_prod)
+
+        return derivation
+
+    @staticmethod
+    def apply(stack, production):
+        if len(production) == 2 and production[1] == EPS:
+            # Empty production
+            stack.pop()
+        else:
+            stack.pop()
+            stack.extend(reversed(production[1:]))
 

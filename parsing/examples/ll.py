@@ -14,15 +14,30 @@ productions = [
     ['F', '(', 'E', ')'],
     ['F', 'id'] 
 ]
+
+print('Grammar: ')
+pprint(productions)
 grammar = Grammar(productions)
 
-# FIRST(1) and FOLLOW(1)
+# FIRST(1) and FOLLOW(1) sets
 first_sets = first(grammar)
 follow_sets = follow(grammar, first_sets)
 
+print('FIRST: ')
 pprint(first_sets)
+
+print('FOLLOW: ')
 pprint(follow_sets)
 
+
+# Parsing
 parser = LLParser(grammar)
+
+print('LL(1) parser table: ')
 pprint(parser.table)
+
+string = ['(', 'id', '+', 'id', ')', '*', 'id']
+
+print(f'Left-most derivation for {" ".join(string)}:')
+pprint(parser.run(string))
 
