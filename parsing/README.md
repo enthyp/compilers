@@ -4,3 +4,13 @@ Crude (but operational) parser generators for a subclass of context-free grammar
 ### Examples
 Leftmost parse tree for `(id + id) * id` according to LL(1)-grammar for simplified regular expression
 ![](examples/parse_tree.png "")
+
+### DONE:
+ * FIRST and FOLLOW sets
+ * LL(1) parser generation
+
+### TODO: 
+ * SLR(1)
+ * LR(1)
+ * LALR(1)
+
