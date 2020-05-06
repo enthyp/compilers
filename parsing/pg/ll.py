@@ -1,5 +1,5 @@
 from collections import defaultdict
-from pg.util import EPS, first, follow
+from pg.util import END, EPS, first, follow
 
 
 class ConflictError(Exception):
@@ -50,11 +50,14 @@ class LLParser:
         self.table = build_table(grammar)
 
     def run(self, string):
+        string.append(END)
+
         stack = [self.grammar.start]
         derivation = []
         
         pos = 0
-        while pos < len(string):
+        # TODO: infinite loop on certain incorrect input?
+        while stack:
             t, N = string[pos], stack[-1]
 
             if N in self.grammar.terminals:
@@ -69,6 +72,9 @@ class LLParser:
                 
                 self.apply(stack, self.grammar.productions[num_prod])
                 derivation.append(num_prod)
+
+        if pos < len(string) - 1:
+            raise InputError(f'Input remaining: {"".join(string[pos:-1])}')
 
         return derivation
 

@@ -1,6 +1,6 @@
 from pprint import pprint
 from pg import LLParser 
-from pg.util import first, follow, Grammar
+from pg.util import first, follow, Grammar, parse_tree
 
 
 # Simple arithmetic expressions grammar
@@ -39,5 +39,9 @@ pprint(parser.table)
 string = ['(', 'id', '+', 'id', ')', '*', 'id']
 
 print(f'Left-most derivation for {" ".join(string)}:')
-pprint(parser.run(string))
+derivation = parser.run(string)
+pprint(derivation)
+
+# Parse tree
+parse_tree(derivation, grammar)
 

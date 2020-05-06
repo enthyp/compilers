@@ -1,4 +1,6 @@
 from collections import defaultdict 
+from graphviz import Digraph
+from uuid import uuid4
 
 EPS = ''
 END = '$'
@@ -97,4 +99,27 @@ def follow(grammar, first_sets):
             break
 
     return dict(follow_sets)
+
+
+def parse_tree(derivation, grammar):
+    graph = Digraph('parse_tree', node_attr={'style': 'filled'})
+    root_id = str(uuid4())
+    graph.node(root_id, label=grammar.start)
+
+    def visualize_prod(node_id, num):
+        prod_num = derivation[num]
+        prod = grammar.productions[prod_num]
+
+        for symbol in prod[1:]:
+            new_id = str(uuid4())
+            graph.node(new_id, label=symbol)
+            graph.edge(node_id, new_id)
+            
+            if symbol in grammar.non_terminals:
+                num = visualize_prod(new_id, num + 1)
+                                
+        return num
+
+    visualize_prod(root_id, 0)
+    graph.render('out/parse_tree', view=True)
 
