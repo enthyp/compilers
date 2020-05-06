@@ -112,7 +112,8 @@ def parse_tree(derivation, grammar):
 
         for symbol in prod[1:]:
             new_id = str(uuid4())
-            graph.node(new_id, label=symbol)
+            label = symbol if symbol != EPS else 'EPS'
+            graph.node(new_id, label=label)
             graph.edge(node_id, new_id)
             
             if symbol in grammar.non_terminals:
