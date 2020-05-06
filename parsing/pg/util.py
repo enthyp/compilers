@@ -63,7 +63,7 @@ def first(grammar):
         if not changed:
             break
 
-    return first_sets
+    return dict(first_sets)
 
 
 # NOTE: FOLLOW(1) for non-terminals only (for terminals - not necessary)
@@ -96,5 +96,5 @@ def follow(grammar, first_sets):
         if not changed:
             break
 
-    return follow_sets
+    return dict(follow_sets)
 
