@@ -102,7 +102,7 @@ def follow(grammar, first_sets):
 
 
 def parse_tree(derivation, grammar):
-    graph = Digraph('parse_tree', node_attr={'style': 'filled'})
+    graph = Digraph('parse_tree', format='png', node_attr={'style': 'filled'})
     root_id = str(uuid4())
     graph.node(root_id, label=grammar.start)
 
