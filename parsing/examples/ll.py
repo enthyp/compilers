@@ -1,9 +1,10 @@
 from pprint import pprint
 from pg import LLParser 
-from pg.util import first, follow, Grammar, parse_tree
+from pg.grammar import Grammar
+from pg.util import first, follow, parse_tree
 
 
-# Simple arithmetic expressions grammar
+# Simplified regular expressions LL(1)-grammar
 productions = [
     ['E', 'T', 'E\''],
     ['E\'', '+', 'T', 'E\''],
