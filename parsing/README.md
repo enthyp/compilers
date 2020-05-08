@@ -8,10 +8,9 @@ Leftmost parse tree for `(id + id) * id` according to LL(1)-grammar for simplifi
 ### DONE:
  * FIRST and FOLLOW sets
  * LL(1) parser generation
- * SLR(1) parser table generation
+ * SLR(1) parser generation
 
 ### TODO: 
- * SLR(1) parser
  * LR(1)
  * LALR(1)
 
