@@ -1,7 +1,7 @@
 from pprint import pprint
+from pg import SLRParser
 from pg.grammar import augmented, Grammar
 from pg.items import item_repr, lr0_collection
-from pg.slr import build_table
 
 
 # Simplified regular expressions SLR(1)-grammar
@@ -28,11 +28,20 @@ for item_set in collection.item_sets:
 pprint(collection.transitions)
 
 
-action, goto = build_table(grammar)
+# Parsing
+parser = SLRParser(grammar)
 
 print('SLR(1)-parser action table:')
-pprint(action)
+pprint(list(enumerate(parser.action)))
 
 print('SLR(1)-parser goto table:')
-pprint(goto)
+pprint(list(enumerate(parser.goto)))
+
+string = ['id', '+', 'id']
+
+print(f'Right-most derivation for {" ".join(string)}:')
+derivation = parser.run(string)
+pprint(derivation)
+
+# TODO: parse tree
 

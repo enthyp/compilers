@@ -47,7 +47,7 @@ def build_table(grammar):
                     insert(action, state, END, ACCEPT)
                 else:          
                     for symbol in follow_sets[NT]:
-                        insert(action, state, symbol, (REDUCE, item.prod_no))
+                        insert(action, state, symbol, (REDUCE, item.prod_no - 1))  # prod_no for grammar without augmentation
 
         # Goto table
         for NT in grammar.non_terminals:
@@ -62,8 +62,49 @@ def build_table(grammar):
 class SLRParser:
     def __init__(self, grammar):
         self.grammar = grammar
-        self.table = build_table(grammar)
+        self.action, self.goto = build_table(grammar)
 
     def run(self, string):
-        pass
+        string.append(END)
+
+        stack = [0]
+        derivation = []        
+        
+        pos = 0
+        while True:
+            t, state = string[pos], stack[-1]
+            
+            action = self.action[state].get(t, None)
+            if not action:
+                raise InputError(f'Error at pos {pos}: no action for {t} in state {state}')
+
+            if action == ACCEPT:
+                return derivation
+            print(action)
+
+            if action[0] == SHIFT:
+                next_state = action[1]
+                stack.extend([t, next_state])
+                pos += 1
+            else:
+                prod_no = action[1]
+                derivation.append(prod_no)
+                
+                prod = self.grammar.productions[prod_no]
+                self.reduce(stack, prod, pos)
+
+    def reduce(self, stack, production, pos):
+        # Pop states and production RHS from stack
+        rhs_len = len(production[1:])
+        stack[:] = stack[:-(2 * rhs_len)]
+
+        # Push LHS and go to next state
+        prev_state = stack[-1]
+        NT = production[0]
+
+        next_state = self.goto[prev_state].get(NT, None)
+        if next_state:
+            stack.extend([NT, next_state])
+        else:
+            raise InputError(f'Error at pos {pos}: no next state for {NT} in state {prev_state} after reduction')
 
