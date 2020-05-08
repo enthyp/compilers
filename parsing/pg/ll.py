@@ -1,13 +1,6 @@
 from collections import defaultdict
+from pg.error import ConflictError, InputError
 from pg.util import END, EPS, first, follow
-
-
-class ConflictError(Exception):
-    """Conflict in parsing table - non LL(1) grammar."""
-
-
-class InputError(Exception):
-    """Incorrect input string."""
 
 
 def insert(table, non_terminal, terminal, num_prod):

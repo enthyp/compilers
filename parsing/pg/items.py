@@ -1,76 +1,87 @@
 from collections import defaultdict
+from copy import copy
+from dataclasses import dataclass
+from typing import Dict, List, Set, Tuple
 from pg.util import EPS
 
 
-def augment(grammar):
-    n_start = grammar.start + '\''
-    grammar.orig_start = grammar.start
-    grammar.start = n_start
-
-    aux_prod = [n_start, grammar.orig_start]
-    grammar.productions = [aux_prod] + grammar.productions
-    grammar.non_terminals.add(n_start)
+@dataclass(frozen=True)
+class LR0Item:
+    prod_no: int
+    position: int
 
 
-def reset(grammar):
-    n_start = grammar.start
-    grammar.start = grammar.orig_start
-    del grammar.orig_start
+def item_repr(item, grammar):
+    prod = grammar.productions[item.prod_no]
+    string = f'{prod[0]} -> '
+    prepos = prod[:item.position + 1][1:]
+    postpos = prod[item.position + 1:]
+    string += ' '.join(prepos + ['<POS>'] + postpos)
+    return string
 
-    grammar.productions = grammar.productions[1:]
-    grammar.non_terminals.remove(n_start)
+
+@dataclass
+class LR0Collection:
+    item_sets: List[Set[LR0Item]]
+    transitions: Dict[(int, int)] 
+
+    def __len__(self):
+        return len(self.item_sets)
 
 
 def lr0_collection(grammar):
-    collection = defaultdict(set)
+    # Initialize collection of LR(0)-item sets
+    init_item = LR0Item(0, 0)
+    init_set = lr0_closure({init_item}, grammar)
 
-    # Augment the grammar and initialize collection of LR(0)-item sets
-    augment(grammar)
-
-    init_item = ((grammar.start, grammar.orig_start), 0)
-    collection[EPS].add(init_item)
-    collection[EPS] = lr0_closure(collection[EPS], grammar)
+    item_sets = [init_set]
+    transitions = {}
 
     # Build item sets for all viable prefixes
     while True:
         changed = False
-        viable_prefixes = set(collection.keys())
+        n_sets = len(item_sets)
 
-        for prefix in viable_prefixes:
-            item_set = collection[prefix]
+        for state in range(n_sets):
+            item_set = item_sets[state]
+
             for symbol in grammar.non_terminals | grammar.terminals:
                 goto_set = lr0_goto(item_set, symbol, grammar)
 
-                if not goto_set or goto_set in collection.values():
+                if not goto_set: 
                     continue
 
-                collection[prefix + symbol] = goto_set
-                changed = True
+                for j, i_set in enumerate(item_sets):
+                    if goto_set == i_set:
+                        transitions[(state, symbol)] = j
+                        break
+                else:
+                    transitions[(state, symbol)] = len(item_sets)
+                    item_sets.append(goto_set)
+                    changed = True
 
         if not changed:
             break
 
-    reset(grammar)
-    return dict(collection)
+    return LR0Collection(item_sets, transitions)
 
 
 def lr0_closure(item_set, grammar):
-    closure = item_set.copy()
-    
+    closure = copy(item_set)
+  
     while True:
         new_items = set()
 
         # TODO: no need to consider all items every time
         for item in closure:
-            prod, pos = item
-            if pos < len(prod) - 1 and prod[pos + 1] in grammar.non_terminals:
-                NT = prod[pos + 1]
+            prod = grammar.productions[item.prod_no]
+
+            if item.position < len(prod) - 1 and prod[item.position + 1] in grammar.non_terminals:
+                NT = prod[item.position + 1]
 
                 # Find all productions with this NT on the left
-                rhss = [tuple(prod) for prod in grammar.productions if prod[0] == NT]
-                
-                for rhs in rhss:
-                    new_items.add((rhs, 0))
+                rhss = [i for i, prod in enumerate(grammar.productions) if prod[0] == NT]
+                new_items.update([LR0Item(rhs, 0) for rhs in rhss])
 
         if new_items <= closure:
             break
@@ -84,9 +95,9 @@ def lr0_goto(item_set, symbol, grammar):
     goto_set = set()
     
     for item in item_set:
-        prod, pos = item
-        if pos < len(prod) - 1 and prod[pos + 1] == symbol:
-            goto_set.add((prod, pos + 1))
+        prod = grammar.productions[item.prod_no]
+        if item.position < len(prod) - 1 and prod[item.position + 1] == symbol:
+            goto_set.add(LR0Item(item.prod_no, item.position + 1))
 
     return lr0_closure(goto_set, grammar)
 

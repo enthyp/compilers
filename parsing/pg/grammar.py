@@ -27,3 +27,15 @@ class Grammar:
         # TODO: topological sorting?
         self.start = productions[0][0]
 
+
+def augmented(grammar):
+    n_grammar = Grammar(grammar.productions)
+    n_start = n_grammar.start + '<AUG>'
+    aux_prod = [n_start, n_grammar.start]
+
+    n_grammar.productions = [aux_prod] + n_grammar.productions
+    n_grammar.start = n_start
+    n_grammar.non_terminals.add(n_grammar.start)
+    
+    return n_grammar
+
