@@ -1,56 +1,17 @@
+from tc.common import BaseVisitor, Environment
 from tc.globals import global_env
-from tc.common import BaseVisitor, Callable, CallableSignature, Environment, Type
 
 
-binary_signatures = {
-    (Type.INT, Type.INT): {
-        '+': Type.INT, 
-        '-': Type.INT, 
-        '*': Type.INT,
-        '^': Type.INT,
-        '==': Type.BOOL, 
-        '!=': Type.BOOL, 
-        '<': Type.BOOL, 
-        '<=': Type.BOOL, 
-        '>': Type.BOOL, 
-        '>=': Type.BOOL
-    },
-    (Type.FLOAT, Type.FLOAT): {
-        '+': Type.FLOAT, 
-        '-': Type.FLOAT, 
-        '*': Type.FLOAT,
-        '/': Type.FLOAT,
-        '^': Type.FLOAT,
-        '==': Type.BOOL, 
-        '!=': Type.BOOL, 
-        '<': Type.BOOL, 
-        '<=': Type.BOOL, 
-        '>': Type.BOOL, 
-        '>=': Type.BOOL
-    }, 
-    (Type.BOOL, Type.BOOL): {
-        '==': Type.BOOL,
-        '!=': Type.BOOL
-    }, 
-    (Type.STRING, Type.STRING): {
-        '+': Type.STRING,
-        '==': Type.BOOL,
-        '!=': Type.BOOL
-    }
-}
-
-unary_signatures = {
-    Type.INT: {
-        '-': Type.INT,
-        'itof': Type.FLOAT
-    },
-    Type.FLOAT: {
-        '-': Type.FLOAT
-    } 
-}
+class Node:
+    pass
 
 
-class TypeCheck(BaseVisitor):
+class DAG:
+    pass
+
+
+class DAGOptimizer(BaseVisitor):
+    """"""
     def __init__(self):
         self.env = global_env()
 
@@ -62,12 +23,10 @@ class TypeCheck(BaseVisitor):
             self.visit(stmt)
 
     def visit_block(self, node):
-        try:
-            self.env = Environment(enclosing=self.env)
-            for stmt in node.statements:
-                self.visit(stmt)
-        finally:
-            self.env = self.env.enclosing
+        self.env = Environment(enclosing=self.env)
+        for stmt in node.statements:
+            self.visit(stmt)
+        self.env = self.env.enclosing
 
     def visit_function_def(self, node):
         self.env = Environment(enclosing=self.env)
@@ -85,7 +44,7 @@ class TypeCheck(BaseVisitor):
 
         param_types = [p.type for p in node.parameters]
 
-        fun = Callable()  # dummy for uniformity 
+        fun = Callable()  # dummy for uniformity
         fun.signature = CallableSignature(param_types, return_type)
         self.env.define_fun(node.name, fun)
 
@@ -99,7 +58,7 @@ class TypeCheck(BaseVisitor):
         self.env.declare_var(node.name, node.type)
 
     def visit_assignment(self, node):
-        l_type = self.env.resolve_var(node.name, level=node.scope_depth)
+        l_type = self.env.resolve_var(node.name)
         r_type = self.visit(node.value)
         assert l_type == r_type
 
@@ -139,16 +98,12 @@ class TypeCheck(BaseVisitor):
         raise TypeCheck.ReturnType(type)
 
     def visit_call(self, node):
-        signature = self.env.resolve_fun(node.name, level=node.scope_depth).signature
-
-        self.env = Environment(enclosing=self.env)
+        signature = self.env.resolve_fun(node.name).signature
         arg_types = [self.visit(a) for a in node.args]
-        self.env = self.env.enclosing
-
         return signature.verify(arg_types)
 
     def visit_variable(self, node):
-        return self.env.resolve_var(node.name, level=node.scope_depth)
+        return self.env.resolve_var(node.name)
 
     @staticmethod
     def visit_literal(node):
@@ -156,22 +111,3 @@ class TypeCheck(BaseVisitor):
 
     def visit_unknown(self, m_name):
         pass
-
-    @staticmethod
-    def check_binary(l_type, r_type, op):
-        try:
-            assert (l_type, r_type) in binary_signatures
-            assert op in binary_signatures[(l_type, r_type)]
-            return binary_signatures[(l_type, r_type)][op]
-        except AssertionError:
-            raise Exception(f'Incorrect types for operator: {l_type} {r_type} {op}')
-
-    @staticmethod
-    def check_unary(e_type, op):
-        try:
-            assert e_type in unary_signatures
-            assert op in unary_signatures[e_type]
-            return unary_signatures[e_type][op]
-        except AssertionError:
-            raise Exception(f'Incorrect type for operator: {e_type} {op}')
-

@@ -98,28 +98,28 @@ class Environment:
     def define_fun(self, name, obj):
         self.functions[name] = obj
 
-    def resolve_fun(self, name, locally=False):
+    def resolve_fun(self, name, level):
         env = self
-        while env:
-            if name in env.functions:
-                return env.functions[name]
-            if locally:
-                break
+        for _ in range(level):
             env = env.enclosing
-        raise Exception(f'Failed to resolve function {name}')
+
+        if name in env.functions:
+            return env.functions[name]
+        else:
+            raise Exception(f'Failed to resolve function {name}')
 
     def declare_var(self, name, obj):
         self.variables[name] = obj
 
-    def resolve_var(self, name, locally=False):
+    def resolve_var(self, name, level):
         env = self
-        while env:
-            if name in env.variables:
-                return env.variables[name]
-            if locally:
-                break
+        for _ in range(level):
             env = env.enclosing
-        raise Exception(f'Failed to resolve variable {name}')
+
+        if name in env.variables:
+            return env.variables[name]
+        else:
+            raise Exception(f'Failed to resolve variable {name}')
 
     def define_var(self, name, obj):
         env = self

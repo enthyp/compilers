@@ -41,6 +41,18 @@ example_function = """
     
     sayHello('good man.')
 """
+example_nested_call = """
+    def TheAnswer(): int {
+        return 42
+    }
+    def relieve(name : string) {
+        var Answer : string = tostring(TheAnswer());
+        print 'Hello, ' name +;
+        print 'The answer you need so desperately is ' Answer +
+    }
+
+    relieve('good man.')
+"""
 example_fib = """
     var n : int = 10;
     
@@ -68,6 +80,7 @@ examples = [
     example_overloading,
     example_int_to_float,
     example_function,
+    example_nested_call,
     example_fib
 ]
 
@@ -123,5 +136,3 @@ parser = Parser()
 ast_root = parser.run(example_fib)
 pprint = PrettyPrinter()
 pprint.run(ast_root, 'out/fib', view=True)
-
-

@@ -9,11 +9,25 @@ var_blocks = """
         { 
             var x: int = 2;
             print x y +;        # 3
+            y = 100;
         }
         var x: int = 3;
-        print x y +;            # 4
+        print x y +;            # 103
     }
     print x;                    # 1
+"""
+
+ci_block = """
+    var a : string = "global";
+    {
+      def showA() {
+        print a;
+      }
+    
+      showA();
+      var a : string = "block";
+      showA();
+    }
 """
 
 fun_blocks = """
@@ -52,6 +66,7 @@ nested_fun = """
 
 programs = [
     var_blocks,
+    ci_block,
     fun_blocks,
     nested_fun
 ]

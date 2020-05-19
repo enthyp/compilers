@@ -23,7 +23,11 @@ class ToInt(Callable):
 
     def call(self, evaluator, args):
         assert len(args) == 1
-        return int(evaluator.visit(args[0]))
+        evaluator.env = Environment(enclosing=evaluator.env)
+        try:
+            return int(evaluator.visit(args[0]))
+        finally:
+            evaluator.env = evaluator.env.enclosing
 
 
 class ToFloat(Callable):
@@ -36,7 +40,11 @@ class ToFloat(Callable):
 
     def call(self, evaluator, args):
         assert len(args) == 1
-        return float(evaluator.visit(args[0]))
+        evaluator.env = Environment(enclosing=evaluator.env)
+        try:
+            return float(evaluator.visit(args[0]))
+        finally:
+            evaluator.env = evaluator.env.enclosing
 
 
 class ToString(Callable):
@@ -49,5 +57,8 @@ class ToString(Callable):
 
     def call(self, evaluator, args):
         assert len(args) == 1
-        return str(evaluator.visit(args[0]))
-
+        evaluator.env = Environment(enclosing=evaluator.env)
+        try:
+            return str(evaluator.visit(args[0]))
+        finally:
+            evaluator.env = evaluator.env.enclosing

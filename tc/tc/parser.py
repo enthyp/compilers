@@ -26,6 +26,7 @@ class Call:
     def __init__(self, name, arguments):
         self.name = name
         self.args = arguments
+        self.scope_depth = None
 
 
 class ForStmt:
@@ -81,6 +82,7 @@ class UnaryExpr:
 class Variable:
     def __init__(self, name):
         self.name = name
+        self.scope_depth = None
 
 
 class VariableDeclaration:
@@ -253,11 +255,13 @@ class Parser:
         """ns_statement : FUNCTION IDENT '(' ')' ':' IDENT block
                         | FUNCTION IDENT '(' ')' block
         """
-        if len(p) == 5:
+        if len(p) == 6:
             return_type = Type.UNIT
+            body = p[5]
         else:
             return_type = Type(p[6])
-        p[0] = FunctionDef(name=p[2], parameters=[], return_type=return_type, body=p[7])
+            body = p[7]
+        p[0] = FunctionDef(name=p[2], parameters=[], return_type=return_type, body=body)
 
     @staticmethod
     def p_function_declaration(p):

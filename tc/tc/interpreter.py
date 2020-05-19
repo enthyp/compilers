@@ -1,11 +1,18 @@
-import math
 import operator
-import re
+from tc.common import BaseVisitor, Environment, Function
 from tc.globals import global_env
 from tc.parser import Parser
+from tc.resolver import Resolver
 from tc.typecheck import TypeCheck
-from tc.common import BaseVisitor, Environment, Function, PrettyPrinter
 
+
+# TODO:
+#  - skip redundant instructions (e.g. ones that do not influence function return value etc.)
+#  - don't recompute common subexpressions
+#  - implement algebraic optimizations of choice
+#  - implement loop code shift (???) optimization
+#  - fix closures (static resolution of variable scope required! ci_block example)
+#    - also, one should not be able to assign closure variable (nor variable from enclosing scope)!
 
 # AST evaluation
 class Evaluator(BaseVisitor):
@@ -39,14 +46,16 @@ class Evaluator(BaseVisitor):
             self.visit(stmt)
 
     def visit_block(self, node):
-        self.env = Environment(enclosing=self.env)
-        for stmt in node.statements:
-            self.visit(stmt)
-        self.env = self.env.enclosing
+        try:
+            self.env = Environment(enclosing=self.env)
+            for stmt in node.statements:
+                self.visit(stmt)
+        finally:
+            self.env = self.env.enclosing
 
     def visit_function_def(self, node):
         try:
-            self.resolve_fun(node.name, locally=True)
+            self.env.resolve_fun(node.name, level=0)
         except:
             self.env.define_fun(node.name, Function(node.parameters, node.body, self.env))
         else:
@@ -57,7 +66,7 @@ class Evaluator(BaseVisitor):
 
     def visit_variable_declaration(self, node):
         try:
-            self.env.resolve_var(node.name, locally=True)
+            self.env.resolve_var(node.name, level=0)
         except:
             value = self.visit(node.value)
             self.env.declare_var(node.name, value)
@@ -65,7 +74,7 @@ class Evaluator(BaseVisitor):
             raise Exception(f'Variable {node.name} declared twice!')
 
     def visit_assignment(self, node):
-        self.env.resolve_var(node.name)
+        self.env.resolve_var(node.name, level=node.scope_depth)
         value = self.visit(node.value)
         self.env.define_var(node.name, value)
  
@@ -107,11 +116,11 @@ class Evaluator(BaseVisitor):
         raise Evaluator.ReturnValue(value)
 
     def visit_call(self, node):
-        function = self.env.resolve_fun(node.name)
+        function = self.env.resolve_fun(node.name, level=node.scope_depth)
         return function.call(self, node.args)
 
     def visit_variable(self, node):
-        return self.env.resolve_var(node.name)
+        return self.env.resolve_var(node.name, level=node.scope_depth)
 
     @staticmethod
     def visit_literal(node):
@@ -121,15 +130,18 @@ class Evaluator(BaseVisitor):
 class Interpreter:
     def __init__(self):
         self.parser = Parser()
+        self.resolver = Resolver()
         self.eval = Evaluator()
         self.typecheck = TypeCheck()
 
     def reset(self):
         self.eval.reset()
         self.typecheck.reset()
+        self.resolver.reset()
 
     def run(self, program):
         ast = self.parser.run(program)
+        self.resolver.run(ast)
         self.typecheck.run(ast)
         self.eval.run(ast)
         self.reset()
