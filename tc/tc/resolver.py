@@ -54,6 +54,7 @@ class Resolver(BaseVisitor):
     def visit_variable_declaration(self, node):
         if node.value:
             self.visit(node.value)
+        # TODO: handle repeating definitions here!
         self.define(node.name, 'variable')
 
     def visit_assignment(self, node):
