@@ -167,4 +167,3 @@ class Interpreter:
         ast = self.algebraic_optimizer.run(ast)
         self.eval.run(ast)
         self.reset()
-

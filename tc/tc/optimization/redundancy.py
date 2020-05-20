@@ -1,36 +1,25 @@
 from tc.common import BaseVisitor
 from tc.globals import global_env
-from tc.parser import Block
 
 global_functions = global_env().functions.keys()
 
 
 class Node:
-    """Node of data dependency DAG."""
+    """Node of data dependency DAG where edges correspond to Use-Def relationship."""
     def __init__(self, node):
         self.ast_node = node  # corresponding AST node
         self.deps = set()  # defs needed for given use (Use-Def relationship)
         self.kills = set()  # set of (name, redefinition node that kills previous definition of name)
 
 
-# HOW TO:
-#  - e.g. for function (def) we have:
-#    - map: name -> assignment node (all redefinitions to be accounted for upon call)
-#    - a dependency on the return node
-#  - for a 'while' loop block:
-#    - map: name -> assignment node (all redefinitions to be accounted for when executing)
 class RedundancyOptimizer(BaseVisitor):
-    """Builds (statically) a data dependency DAG and removes redundant subtrees of input AST.
+    """Statically builds a DAG and removes redundant subtrees of input AST."""
 
-    Attributes:
-        effective_nodes (set): nodes that have side effects, e.g. 'return', 'print' and the like.
-            In the end only the result of their execution matters, any data processing that does
-            not contribute to an effective node is redundant
-        scopes (list): stack of mappings (scopes) from function/variable name to the defining AST
-            node AND all redefinitions to be accounted for
-    """
+    BUILD = 0
+    PRUNE = 1
 
     def __init__(self):
+        self.mode = RedundancyOptimizer.BUILD
         self.effective_nodes = set()
         self.scopes = [{
             'variable': {},
@@ -38,6 +27,7 @@ class RedundancyOptimizer(BaseVisitor):
         }]
 
     def reset(self):
+        self.mode = self.BUILD
         self.effective_nodes = set()
         self.scopes = [{
             'variable': {},
@@ -64,18 +54,20 @@ class RedundancyOptimizer(BaseVisitor):
             self.scopes[-1]['variable'][name] = node
 
     def run(self, statements):
-        # Build the dependency graph and find effective nodes
-        for stmt in statements:
-            self.visit(stmt)
+        if self.mode == self.BUILD:
+            # Build the dependency graph and find effective nodes
+            for stmt in statements:
+                self.visit(stmt)
 
-        # Prune ineffective nodes
-        effective = self.extend_effective()
+            self.effective_nodes = self.extend_effective()
 
-        effective_statements = [s for s in statements if s in effective]
-        for stmt in effective_statements:
-            self.prune(stmt, effective)
+            # Prune redundant subtrees.
+            self.mode = self.PRUNE
+            effective_statements = [s for s in statements if s in self.effective_nodes]
+            for stmt in effective_statements:
+                self.visit(stmt)
 
-        return effective_statements
+            return effective_statements
 
     def extend_effective(self):
         def extend_inner(node):
@@ -88,18 +80,16 @@ class RedundancyOptimizer(BaseVisitor):
             extend_inner(node)
         return effective_ast_nodes
 
-    @staticmethod
-    def prune(node, effective):
-        if not isinstance(node, Block):
+    def visit_block(self, node):
+        if self.mode == self.PRUNE:
+            remaining_statements = []
+            for stmt in node.statements:
+                if stmt in self.effective_nodes:
+                    remaining_statements.append(stmt)
+                    self.visit(stmt)
+            node.statements = remaining_statements
             return
 
-        remaining_statements = []
-        for stmt in node.statements:
-            if stmt in effective:
-                remaining_statements.append(stmt)
-        node.statements = remaining_statements
-
-    def visit_block(self, node):
         b_node = Node(node)
 
         self.push_scope()
@@ -115,6 +105,10 @@ class RedundancyOptimizer(BaseVisitor):
         return b_node
 
     def visit_function_def(self, node):
+        if self.mode == self.PRUNE:
+            self.visit(node.body)
+            return
+
         f_node = Node(node)
 
         self.push_scope()
@@ -132,6 +126,9 @@ class RedundancyOptimizer(BaseVisitor):
         return f_node
 
     def visit_print_stmt(self, node):
+        if self.mode == self.PRUNE:
+            return
+
         p_node = Node(node)
         self.effective_nodes.add(p_node)
         n = self.visit(node.expr)
@@ -141,6 +138,9 @@ class RedundancyOptimizer(BaseVisitor):
         return p_node
 
     def visit_variable_declaration(self, node):
+        if self.mode == self.PRUNE:
+            return
+
         v_node = Node(node)
 
         if node.value:
@@ -152,6 +152,9 @@ class RedundancyOptimizer(BaseVisitor):
         return v_node
 
     def visit_assignment(self, node):
+        if self.mode == self.PRUNE:
+            return
+
         a_node = Node(node)
         n = self.visit(node.value)
 
@@ -161,6 +164,10 @@ class RedundancyOptimizer(BaseVisitor):
         return a_node
 
     def visit_if_stmt(self, node):
+        if self.mode == self.PRUNE:
+            self.visit(node.body)
+            return
+
         i_node = Node(node)
         c_node = self.visit(node.condition)
         i_node.deps.add(c_node)
@@ -172,6 +179,10 @@ class RedundancyOptimizer(BaseVisitor):
         return i_node
 
     def visit_while_stmt(self, node):
+        if self.mode == self.PRUNE:
+            self.visit(node.body)
+            return
+
         w_node = Node(node)
         c_node = self.visit(node.condition)
         w_node.deps.add(c_node)
@@ -183,6 +194,10 @@ class RedundancyOptimizer(BaseVisitor):
         return w_node
 
     def visit_for_stmt(self, node):
+        if self.mode == self.PRUNE:
+            self.visit(node.body)
+            return
+
         f_node = Node(node)
         self.push_scope()
 
@@ -198,6 +213,9 @@ class RedundancyOptimizer(BaseVisitor):
         return f_node
 
     def visit_binary_expr(self, node):
+        if self.mode == self.PRUNE:
+            return
+
         b_node = Node(node)
         l_node = self.visit(node.left)
         r_node = self.visit(node.right)
@@ -207,6 +225,9 @@ class RedundancyOptimizer(BaseVisitor):
         return b_node
 
     def visit_unary_expr(self, node):
+        if self.mode == self.PRUNE:
+            return
+
         u_node = Node(node)
         e_node = self.visit(node.expr)
 
@@ -220,6 +241,9 @@ class RedundancyOptimizer(BaseVisitor):
             self.node = return_node
 
     def visit_return_stmt(self, node):
+        if self.mode == self.PRUNE:
+            return
+
         r_node = Node(node)
         e_node = self.visit(node.expr)
         r_node.deps.add(e_node)
@@ -227,6 +251,9 @@ class RedundancyOptimizer(BaseVisitor):
         raise RedundancyOptimizer.Return(r_node)
 
     def visit_call(self, node):
+        if self.mode == self.PRUNE:
+            return
+
         c_node = Node(node)
 
         for a in node.args:
@@ -241,123 +268,19 @@ class RedundancyOptimizer(BaseVisitor):
         return c_node
 
     def visit_variable(self, node):
+        if self.mode == self.PRUNE:
+            return
+
         v_node = Node(node)
         value_node = self.resolve(node.name, 'variable')
         v_node.deps.add(value_node)
         return v_node
 
-    @staticmethod
-    def visit_literal(node):
+    def visit_literal(self, node):
+        if self.mode == self.PRUNE:
+            return
+
         return Node(node)
-
-    def visit_unknown(self, m_name):
-        pass
-
-
-# HOW TO:
-#  - find REACHING DEFINITIONS for expressions/statements within the loop
-#  - if these are outside the loop - expression/statement can be moved outside the loop body
-class LoopOptimizer(BaseVisitor):
-    """Moves loop-invariant expressions outside of the loops (conditions, bodies etc)."""
-
-    def __init__(self):
-        self.scopes = [{'variable': set(), 'function': set()}]
-
-    def reset(self):
-        self.scopes = [{'variable': set(), 'function': set()}]
-
-    def push_scope(self):
-        self.scopes.append({'variable': set(), 'function': set()})
-
-    def define(self, name, what):
-        self.scopes[-1][what].add(name)
-
-    def resolve(self, name, what):
-        for i in range(len(self.scopes)):
-            if name in self.scopes[-(i + 1)][what]:
-                return i
-        raise Exception(f'Failed to resolve {what} {name}')
-
-    def pop_scope(self):
-        self.scopes.pop()
-
-    def run(self, statements):
-        for stmt in statements:
-            self.visit(stmt)
-
-    def visit_block(self, node):
-        self.push_scope()
-        for stmt in node.statements:
-            self.visit(stmt)
-        self.pop_scope()
-
-    def visit_function_def(self, node):
-        self.define(node.name, 'function')
-
-        self.push_scope()
-        for p in node.parameters:
-            self.define(p.name, 'variable')
-
-        self.visit(node.body)
-        self.pop_scope()
-
-    def visit_print_stmt(self, node):
-        self.visit(node.expr)
-
-    def visit_variable_declaration(self, node):
-        if node.value:
-            self.visit(node.value)
-        self.define(node.name, 'variable')
-
-    def visit_assignment(self, node):
-        depth = self.resolve(node.name, 'variable')
-        node.scope_depth = depth  # place scope info in the tree
-        self.visit(node.value)
-
-    def visit_if_stmt(self, node):
-        self.visit(node.condition)
-        self.visit(node.body)
-
-    def visit_while_stmt(self, node):
-        self.visit(node.condition)
-        self.visit(node.body)
-
-    def visit_for_stmt(self, node):
-        self.push_scope()
-
-        self.visit(node.initializer)
-        self.visit(node.condition)
-        self.visit(node.body)
-        self.visit(node.increment)
-
-        self.pop_scope()
-
-    def visit_binary_expr(self, node):
-        self.visit(node.left)
-        self.visit(node.right)
-
-    def visit_unary_expr(self, node):
-        self.visit(node.expr)
-
-    def visit_return_stmt(self, node):
-        self.visit(node.expr)
-
-    def visit_call(self, node):
-        depth = self.resolve(node.name, 'function')
-        node.scope_depth = depth  # place scope info in the tree
-
-        self.push_scope()
-        for a in node.args:
-            self.visit(a)
-        self.pop_scope()
-
-    def visit_variable(self, node):
-        depth = self.resolve(node.name, 'variable')
-        node.scope_depth = depth  # place scope info in the tree
-
-    @staticmethod
-    def visit_literal(node):
-        pass
 
     def visit_unknown(self, m_name):
         pass
