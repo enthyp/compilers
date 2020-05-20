@@ -2,7 +2,7 @@ from tc import Parser, PrettyPrinter
 from tc.optimizers import ExpressionDAGOptimizer
 
 
-example = """
+example1 = """
     var a : int = 3;
     var b : int = 1;
     var c : int = 10;
@@ -12,11 +12,27 @@ example = """
     return x
 """
 
-parser = Parser()
-ast_root = parser.run(example)
+example2 = """
+    var b : int = 2;
+    var c : int = 4;
+    var a : int = b c +;
+    var d : int = 8;
+    b = a d -;
+    c = b c +;
+    d = a d -;
+"""
 
-optimizer = ExpressionDAGOptimizer()
-optimizer.run(ast_root)
 
-pprint = PrettyPrinter()
-pprint.run(ast_root, 'out/fib', view=True)
+def run(example, name):
+    parser = Parser()
+    ast_root = parser.run(example)
+
+    optimizer = ExpressionDAGOptimizer()
+    optimizer.run(ast_root)
+
+    pprint = PrettyPrinter()
+    pprint.run(ast_root, f'out/{name}', view=True)
+
+
+run(example1, 'csopt1')
+run(example2, 'csopt2')  # TODO: requires
