@@ -3,7 +3,6 @@ from tc.common import BaseVisitor
 
 class ExpressionDAGOptimizer(BaseVisitor):
     """Converts AST to DAG by reusing common subexpression nodes."""
-    # TODO: save value of expression in node (interpreter)
 
     def __init__(self):
         self.subexpr = {}
