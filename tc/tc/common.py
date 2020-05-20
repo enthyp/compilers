@@ -8,7 +8,7 @@ class BaseVisitor:
 
     cc_pattern = re.compile(r'([A-Z]+)')
 
-    def visit(self, node):
+    def visit(self, node, *args):
         # Find appropriate implementation.
         k_name = node.__class__.__name__
         k_name = self.cc_pattern.sub(r'_\1', k_name).lower()  # to snake case
@@ -19,7 +19,7 @@ class BaseVisitor:
         if not method:
             self.visit_unknown(m_name)
         else:
-            return method(node)
+            return method(node, *args)
 
     def visit_unknown(self, m_name):
         raise Exception('No such method: {}!'.format(m_name))
@@ -134,6 +134,7 @@ class PrettyPrinter(BaseVisitor):
         self.graph = Digraph('.', node_attr={'style': 'filled'}, format='png')
         self.root_id = self.node_id()
         self.graph.node(self.root_id, 'top')
+        self.viz_nodes = {}
 
     def run(self, statements, filepath, view=True):
         for stmt in statements:
@@ -190,8 +191,12 @@ class PrettyPrinter(BaseVisitor):
         return str(uuid4())
 
     def add_viz_node(self, node, label, child_attributes):
+        if node in self.viz_nodes:
+            return self.viz_nodes[node]
+
         n_id = self.node_id()
         self.graph.node(n_id, label=label)
+        self.viz_nodes[node] = n_id
 
         for c in child_attributes:
             field = getattr(node, c)
