@@ -82,14 +82,11 @@ class ExpressionDAGOptimizer(BaseVisitor):
         self.visit(node.body)
 
     def visit_while_stmt(self, node):
-        self.visit(node.condition, node, 'condition')
         self.visit(node.body)
 
     def visit_for_stmt(self, node):
         self.visit(node.initializer)
-        self.visit(node.condition, node, 'condition')
         self.visit(node.body)
-        self.visit(node.increment)
 
     def visit_binary_expr(self, node, parent, parent_attr):
         l_key = self.visit(node.left, node, 'left')
@@ -98,6 +95,8 @@ class ExpressionDAGOptimizer(BaseVisitor):
 
         if cur_key in self.subexpr:
             setattr(parent, parent_attr, self.subexpr[cur_key])
+            node.caching = True
+            node.cache = None
         else:
             self.subexpr[cur_key] = node
         return cur_key
@@ -107,6 +106,8 @@ class ExpressionDAGOptimizer(BaseVisitor):
         cur_key = (key, node.op)
         if cur_key in self.subexpr:
             setattr(parent, parent_attr, self.subexpr[cur_key])
+            node.caching = True
+            node.cache = None
         else:
             self.subexpr[cur_key] = node
         return cur_key

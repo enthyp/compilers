@@ -22,6 +22,17 @@ example2 = """
     d = a d -;
 """
 
+example3 = """
+    var i : int = 1;
+    var x : bool = i 10 <;
+    
+    while (i 10 <) {
+        var tmp : int = i -1 *;
+        i = i 2 +;
+        print tmp
+    }
+"""
+
 
 def run(example, name):
     parser = Parser()
@@ -35,4 +46,5 @@ def run(example, name):
 
 
 run(example1, 'csopt1')
-run(example2, 'csopt2')  # TODO: requires
+run(example2, 'csopt2')
+run(example3, 'while')

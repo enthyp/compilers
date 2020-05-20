@@ -98,14 +98,30 @@ class Evaluator(BaseVisitor):
         self.env = self.env.enclosing
 
     def visit_binary_expr(self, node):
+        caching = getattr(node, 'caching', None)
+        if caching and node.cache is not None:
+            return node.cache
+
         op = self.operators[node.op]
         lval = self.visit(node.left)
         rval = self.visit(node.right)
-        return op(lval, rval)
+        value = op(lval, rval)
+
+        if caching:
+            node.cache = value
+        return value
 
     def visit_unary_expr(self, node):
+        caching = getattr(node, 'caching', None)
+        if caching and node.cache is not None:
+            return node.cache
+
         op = self.unary_operators[node.op]
-        return op(self.visit(node.expr))
+        value = op(self.visit(node.expr))
+
+        if caching:
+            node.cache = value
+        return value
 
     class ReturnValue(Exception):
         def __init__(self, val):
@@ -146,7 +162,7 @@ class Interpreter:
         ast = self.parser.run(program)
         self.resolver.run(ast)
         self.typecheck.run(ast)
-        self.dag_optimizer.run(ast)
+        # self.dag_optimizer.run(ast)
         self.eval.run(ast)
         self.reset()
 

@@ -89,6 +89,7 @@ for example in examples:
     print('Result: ')
     interpreter.run(example)
 
+
 # Tests for incorrect examples.
 bad_types = """
     var x : string = 1
