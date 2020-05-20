@@ -1,15 +1,24 @@
 from tc.common import BaseVisitor
+from tc.globals import global_env
 from tc.parser import Block
+
+global_functions = global_env().functions.keys()
 
 
 class Node:
-    pass
+    """Node of data dependency DAG."""
+    def __init__(self, node):
+        self.ast_node = node  # corresponding AST node
+        self.deps = set()  # defs needed for given use (Use-Def relationship)
+        self.kills = set()  # set of (name, redefinition node that kills previous definition of name)
 
 
-class DAG:
-    pass
-
-
+# HOW TO:
+#  - e.g. for function (def) we have:
+#    - map: name -> assignment node (all redefinitions to be accounted for upon call)
+#    - a dependency on the return node
+#  - for a 'while' loop block:
+#    - map: name -> assignment node (all redefinitions to be accounted for when executing)
 class RedundancyOptimizer(BaseVisitor):
     """Builds (statically) a data dependency DAG and removes redundant subtrees of input AST.
 
@@ -17,46 +26,42 @@ class RedundancyOptimizer(BaseVisitor):
         effective_nodes (set): nodes that have side effects, e.g. 'return', 'print' and the like.
             In the end only the result of their execution matters, any data processing that does
             not contribute to an effective node is redundant
-        scopes (list): stack of mappings (scopes) from variable name to AST node that defined the
-            variable value
-            # TODO: to remove redundant functions - you need to store their definition nodes too...
-        control_deps (list): stack of sets of nodes that MAY be dependencies for nodes lower in
-            the tree - like variables in the 'if' clause or 'for' condition etc
-        dependencies (dict): map from node to list of nodes that key node depends on
+        scopes (list): stack of mappings (scopes) from function/variable name to the defining AST
+            node AND all redefinitions to be accounted for
     """
 
     def __init__(self):
         self.effective_nodes = set()
-        self.scopes = [{}]
-        self.control_deps = [set()]
-        self.dependencies = {}
+        self.scopes = [{
+            'variable': {},
+            'function': {f: Node(None) for f in global_functions}
+        }]
 
     def reset(self):
         self.effective_nodes = set()
-        self.scopes = [{}]
-        self.control_deps = [set()]
-        self.dependencies = {}
+        self.scopes = [{
+            'variable': {},
+            'function': {f: Node(None) for f in global_functions}
+        }]
 
     def push_scope(self):
-        self.scopes.append({})
+        self.scopes.append({'variable': {}, 'function': {}})
 
-    def push_deps(self):
-        self.control_deps.append(set())
+    def define(self, name, node, what):
+        self.scopes[-1][what][name] = node
 
-    def define_var(self, name, node):
-        self.scopes[-1][name] = node
-
-    def resolve_var(self, name):
+    def resolve(self, name, what):
         for i in range(len(self.scopes)):
-            if name in self.scopes[-(i + 1)]:
-                return self.scopes[-(i + 1)][name]
-        raise Exception(f'Failed to resolve variable {name}')
+            if name in self.scopes[-(i + 1)][what]:
+                return self.scopes[-(i + 1)][what][name]
+        raise Exception(f'Failed to resolve {what} {name}')
 
     def pop_scope(self):
         self.scopes.pop()
 
-    def pop_deps(self):
-        self.control_deps.pop()
+    def kill(self, kills):
+        for name, node in kills:
+            self.scopes[-1]['variable'][name] = node
 
     def run(self, statements):
         # Build the dependency graph and find effective nodes
@@ -64,122 +69,186 @@ class RedundancyOptimizer(BaseVisitor):
             self.visit(stmt)
 
         # Prune ineffective nodes
-        self.extend_effective()
+        effective = self.extend_effective()
 
-        effective_statements = [s for s in statements if s in self.effective_nodes]
+        effective_statements = [s for s in statements if s in effective]
         for stmt in effective_statements:
-            self.prune(stmt)
+            self.prune(stmt, effective)
 
         return effective_statements
 
     def extend_effective(self):
         def extend_inner(node):
-            if node not in self.dependencies:
-                return
-            for nd in self.dependencies[node]:
-                self.effective_nodes.add(nd)
-                extend_inner(nd)
+            effective_ast_nodes.add(node.ast_node)
+            for d in node.deps:
+                extend_inner(d)
 
-        for node in self.effective_nodes.copy():
+        effective_ast_nodes = set()
+        for node in self.effective_nodes:
             extend_inner(node)
+        return effective_ast_nodes
 
-    def prune(self, node):
-        if node not in self.effective_nodes:
-            # Top level redundant node
-            return
-
+    @staticmethod
+    def prune(node, effective):
         if not isinstance(node, Block):
             return
 
         remaining_statements = []
         for stmt in node.statements:
-            if stmt in self.effective_nodes:
+            if stmt in effective:
                 remaining_statements.append(stmt)
         node.statements = remaining_statements
 
     def visit_block(self, node):
+        b_node = Node(node)
+
         self.push_scope()
-        for stmt in node.statements:
-            self.visit(stmt)
+        try:
+            for stmt in node.statements:
+                n = self.visit(stmt)
+                n.deps.add(b_node)
+                b_node.kills.update(n.kills)
+        except RedundancyOptimizer.Return as r:
+            b_node.deps.add(r.node)
         self.pop_scope()
 
+        return b_node
+
     def visit_function_def(self, node):
-        return  # TODO
+        f_node = Node(node)
 
         self.push_scope()
         for p in node.parameters:
-            self.define(p.name, 'variable')
+            n = Node(node)
+            self.define(p.name, n, 'variable')
 
-        self.visit(node.body)
+        b_node = self.visit(node.body)
         self.pop_scope()
+
+        f_node.deps = b_node.deps
+        f_node.kills = b_node.kills
+        self.define(node.name, f_node, 'function')
+
+        return f_node
 
     def visit_print_stmt(self, node):
-        self.effective_nodes.add(node)
-        self.visit(node.expr)
-        self.dependencies[node] = [node.expr]
+        p_node = Node(node)
+        self.effective_nodes.add(p_node)
+        n = self.visit(node.expr)
+
+        p_node.deps.add(n)
+        self.kill(n.kills)
+        return p_node
 
     def visit_variable_declaration(self, node):
-        # TODO: add control_deps to dependencies EVERYWHERE!
-        self.define_var(node.name, node)
+        v_node = Node(node)
+
         if node.value:
-            self.visit(node.value)
-            self.dependencies[node] = [node.value]
+            n = self.visit(node.value)
+            v_node.deps.add(n)
+            self.kill(n.kills)
+
+        self.define(node.name, v_node, 'variable')
+        return v_node
 
     def visit_assignment(self, node):
-        self.define_var(node.name, node)  # overwrite previous node
-        self.visit(node.value)
-        self.dependencies[node] = [node.value]
+        a_node = Node(node)
+        n = self.visit(node.value)
+
+        a_node.deps.add(n)
+        self.define(node.name, a_node, 'variable')
+
+        return a_node
 
     def visit_if_stmt(self, node):
-        return  # TODO
-        self.visit(node.condition)
-        self.visit(node.body)
+        i_node = Node(node)
+        c_node = self.visit(node.condition)
+        i_node.deps.add(c_node)
+
+        b_node = self.visit(node.body)
+        b_node.deps.add(i_node)
+        i_node.kills.update(b_node.kills)
+
+        return i_node
 
     def visit_while_stmt(self, node):
-        return  # TODO
+        w_node = Node(node)
+        c_node = self.visit(node.condition)
+        w_node.deps.add(c_node)
 
-        self.visit(node.condition)
-        self.visit(node.body)
+        b_node = self.visit(node.body)
+        b_node.deps.add(w_node)
+        w_node.kills.update(b_node.kills)
+
+        return w_node
 
     def visit_for_stmt(self, node):
-        return  # TODO
-
+        f_node = Node(node)
         self.push_scope()
 
-        self.visit(node.initializer)
-        self.visit(node.condition)
-        self.visit(node.body)
-        self.visit(node.increment)
+        b_node = self.visit(node.body)
+        b_node.deps.add(f_node)
+        f_node.deps.update({
+            self.visit(node.initializer),
+            self.visit(node.condition),
+            self.visit(node.increment),
+        })
 
         self.pop_scope()
+        return f_node
 
     def visit_binary_expr(self, node):
-        self.visit(node.left)
-        self.visit(node.right)
-        self.dependencies[node] = [node.left, node.right]
+        b_node = Node(node)
+        l_node = self.visit(node.left)
+        r_node = self.visit(node.right)
+
+        b_node.deps.update({l_node, r_node})
+        b_node.kills.update(l_node.kills | r_node.kills)
+        return b_node
 
     def visit_unary_expr(self, node):
-        self.visit(node.expr)
-        self.dependencies[node] = [node.expr]
+        u_node = Node(node)
+        e_node = self.visit(node.expr)
+
+        u_node.deps.add(e_node)
+        u_node.kills.update(e_node.kills)
+        return u_node
+
+    class Return(Exception):
+        def __init__(self, return_node):
+            super()
+            self.node = return_node
 
     def visit_return_stmt(self, node):
-        self.effective_nodes.add(node)
-        self.visit(node.expr)
-        self.dependencies[node] = [node.expr]
+        r_node = Node(node)
+        e_node = self.visit(node.expr)
+        r_node.deps.add(e_node)
+        r_node.kills.update(e_node.kills)
+        raise RedundancyOptimizer.Return(r_node)
 
     def visit_call(self, node):
-        self.dependencies[node] = []
+        c_node = Node(node)
+
         for a in node.args:
-            self.visit(a)
-            self.dependencies[node].add(a)
+            n = self.visit(a)
+            c_node.deps.add(n)
+            self.kill(n.kills)
+
+        f_node = self.resolve(node.name, 'function')
+        c_node.deps.add(f_node)
+        self.kill(f_node.kills)
+
+        return c_node
 
     def visit_variable(self, node):
-        def_node = self.resolve_var(node.name)
-        self.dependencies[node] = [def_node]
+        v_node = Node(node)
+        value_node = self.resolve(node.name, 'variable')
+        v_node.deps.add(value_node)
+        return v_node
 
     @staticmethod
     def visit_literal(node):
-        pass
+        return Node(node)
 
     def visit_unknown(self, m_name):
         pass
