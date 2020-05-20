@@ -1,5 +1,5 @@
 from tc import Parser, PrettyPrinter
-from tc.optimizers import ExpressionDAGOptimizer
+from tc.optimization import ExpressionDAGOptimizer
 
 
 example1 = """

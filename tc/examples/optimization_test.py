@@ -1,5 +1,5 @@
 from tc import Parser, PrettyPrinter
-from tc.optimizers import RedundancyOptimizer
+from tc.optimization.optimizers import RedundancyOptimizer
 
 
 example = """

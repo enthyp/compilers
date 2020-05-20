@@ -1,7 +1,7 @@
 import operator
 from tc.common import BaseVisitor, Environment, Function
 from tc.globals import global_env
-from tc.optimizers import ExpressionDAGOptimizer
+from tc.optimization import ExpressionDAGOptimizer
 from tc.parser import Parser
 from tc.resolver import Resolver
 from tc.typecheck import TypeCheck
