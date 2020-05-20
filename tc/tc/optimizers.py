@@ -261,7 +261,7 @@ class ExpressionDAGOptimizer(BaseVisitor):
                 raise
         finally:
             if outermost:
-                self.in_expr = False
+                self.reset()
 
     def visit_unary_expr(self, node, parent, parent_attr):
         outermost = not self.in_expr
@@ -280,7 +280,7 @@ class ExpressionDAGOptimizer(BaseVisitor):
                 raise
         finally:
             if outermost:
-                self.in_expr = False
+                self.reset()
 
     def visit_return_stmt(self, node):
         self.visit(node.expr, node, 'expr')

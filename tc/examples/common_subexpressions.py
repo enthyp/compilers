@@ -6,6 +6,7 @@ example = """
     var a : int = 3;
     var b : int = 1;
     var c : int = 10;
+    var l : int = b c -;
     var d : int = 100;
     var x : int = b c - a * b c - d * + a +;
     return x
