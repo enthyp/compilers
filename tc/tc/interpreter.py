@@ -1,7 +1,7 @@
 import operator
 from tc.common import BaseVisitor, Environment, Function
 from tc.globals import global_env
-from tc.optimization import AlgebraicOptimizer, ExpressionDAGOptimizer
+from tc.optimization import AlgebraicOptimizer, ExpressionDAGOptimizer, RedundancyOptimizer
 from tc.parser import Parser
 from tc.resolver import Resolver
 from tc.typecheck import TypeCheck
@@ -148,6 +148,7 @@ class Interpreter:
     def __init__(self):
         self.algebraic_optimizer = AlgebraicOptimizer()
         self.dag_optimizer = ExpressionDAGOptimizer()
+        self.redundancy_optimizer = RedundancyOptimizer()
         self.parser = Parser()
         self.resolver = Resolver()
         self.eval = Evaluator()
@@ -155,6 +156,7 @@ class Interpreter:
 
     def reset(self):
         self.dag_optimizer.reset()
+        self.redundancy_optimizer.reset()
         self.eval.reset()
         self.typecheck.reset()
         self.resolver.reset()
@@ -163,6 +165,7 @@ class Interpreter:
         ast = self.parser.run(program)
         self.resolver.run(ast)
         self.typecheck.run(ast)
+        # ast = self.redundancy_optimizer.run(ast)
         self.dag_optimizer.run(ast)
         ast = self.algebraic_optimizer.run(ast)
         self.eval.run(ast)

@@ -28,6 +28,15 @@ example3 = """
     print b d + fun() *
 """
 
+example4 = """
+    var i : int = 1;
+    while (i 10 <) {
+        var tmp : int = i -1 *;
+        i = i 2 +;
+        print tmp
+    }
+"""
+
 
 def run(example, name):
     parser = Parser()
@@ -41,3 +50,4 @@ def run(example, name):
 
 
 run(example3, 'redundancy3')
+run(example4, 'redundancy_while')

@@ -1,19 +1,20 @@
 from tc.common import BaseVisitor
 from tc.globals import global_env
+from tc.parser import Variable
 
 global_functions = global_env().functions.keys()
 
 
 class Node:
-    """Node of data dependency DAG where edges correspond to Use-Def relationship."""
+    """Node of data dependency graph where edges correspond to Use-Define relations."""
     def __init__(self, node):
         self.ast_node = node  # corresponding AST node
-        self.deps = set()  # defs needed for given use (Use-Def relationship)
+        self.deps = set()  # defs needed for given use (Use-Define relationship)
         self.kills = set()  # set of (name, redefinition node that kills previous definition of name)
 
 
 class RedundancyOptimizer(BaseVisitor):
-    """Statically builds a DAG and removes redundant subtrees of input AST."""
+    """Statically builds a use-def graph and removes redundant subtrees of input AST."""
 
     BUILD = 0
     PRUNE = 1
@@ -73,7 +74,8 @@ class RedundancyOptimizer(BaseVisitor):
         def extend_inner(node):
             effective_ast_nodes.add(node.ast_node)
             for d in node.deps:
-                extend_inner(d)
+                if d.ast_node not in effective_ast_nodes:  # not a DAG - e.g. while loops
+                    extend_inner(d)
 
         effective_ast_nodes = set()
         for node in self.effective_nodes:
@@ -146,6 +148,8 @@ class RedundancyOptimizer(BaseVisitor):
         if node.value:
             n = self.visit(node.value)
             v_node.deps.add(n)
+            v_node.kills.update(n.kills)
+            v_node.kills.add((node.name, v_node))
             self.kill(n.kills)
 
         self.define(node.name, v_node, 'variable')
@@ -159,6 +163,7 @@ class RedundancyOptimizer(BaseVisitor):
         n = self.visit(node.value)
 
         a_node.deps.add(n)
+        a_node.kills.add((node.name, a_node))
         self.define(node.name, a_node, 'variable')
 
         return a_node
@@ -189,7 +194,20 @@ class RedundancyOptimizer(BaseVisitor):
 
         b_node = self.visit(node.body)
         b_node.deps.add(w_node)
+
         w_node.kills.update(b_node.kills)
+
+        # Variables in loop condition depend on redefinitions in loop body!
+        # TODO: separation of data dependencies from AST structure would do better?
+        cond_deps = set()
+        for n in c_node.deps:
+            if isinstance(n.ast_node, Variable):
+                cond_deps.add(n.ast_node.name)
+        print(cond_deps)
+        print(b_node.kills)
+        for name, node in b_node.kills:
+            if name in cond_deps:
+                c_node.deps.add(node)
 
         return w_node
 
