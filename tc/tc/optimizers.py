@@ -242,7 +242,6 @@ class ExpressionDAGOptimizer(BaseVisitor):
         self.visit(node.increment)
 
     def visit_binary_expr(self, node, parent, parent_attr):
-        print('in: ', node)
         outermost = not self.in_expr
 
         self.in_expr = True
@@ -289,8 +288,9 @@ class ExpressionDAGOptimizer(BaseVisitor):
         """We can't track side effects yet - retreat!"""
         pass
 
-    def visit_call(self, node, parent, parent_attr):
-        raise ExpressionDAGOptimizer.Call()
+    def visit_call(self, node, *args):
+        if self.in_expr:
+            raise ExpressionDAGOptimizer.Call()
 
     def visit_variable(self, node, parent, parent_attr):
         return node.name
