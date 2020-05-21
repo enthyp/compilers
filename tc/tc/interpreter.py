@@ -9,11 +9,7 @@ from tc.typecheck import TypeCheck
 
 # TODO:
 #  - skip redundant instructions (e.g. ones that do not influence function return value etc.)
-#  - don't recompute common subexpressions
-#  - implement algebraic optimizations of choice
-#  - implement loop code shift (???) optimization
-#  - fix closures (static resolution of variable scope required! ci_block example)
-#    - also, one should not be able to assign closure variable (nor variable from enclosing scope)!
+#  - implement loop code shift optimization
 
 # AST evaluation
 class Evaluator(BaseVisitor):
@@ -165,7 +161,7 @@ class Interpreter:
         ast = self.parser.run(program)
         self.resolver.run(ast)
         self.typecheck.run(ast)
-        # ast = self.redundancy_optimizer.run(ast)
+        ast = self.redundancy_optimizer.run(ast)
         self.dag_optimizer.run(ast)
         ast = self.algebraic_optimizer.run(ast)
         self.eval.run(ast)

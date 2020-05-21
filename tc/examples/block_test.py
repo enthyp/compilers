@@ -42,10 +42,10 @@ fun_blocks = """
             print 'Hello from inner scope, ' name +
         }
         
-        fun(name);  # inner
+        print fun(name);  # inner
     }
 
-    fun(name)       # global
+    print fun(name)       # global
 """
 
 nested_fun = """
@@ -74,4 +74,3 @@ programs = [
 for program in programs:
     interpreter.run(program)
     print()
-

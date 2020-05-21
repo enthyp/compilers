@@ -5,6 +5,122 @@ from tc.parser import Variable
 global_functions = global_env().functions.keys()
 
 
+# HOW TO:
+#  - find top level statements with side effects:
+#    - top level 'print' statements
+#    - top level calls of functions with side effects
+class EffectiveNodeSearch(BaseVisitor):
+    def __init__(self):
+        self.effective_nodes = set()
+        self.scopes = [{}]
+        self.fun_def_scopes = []
+
+    def reset(self):
+        self.effective_nodes = set()
+        self.scopes = [{}]
+        self.fun_def_scopes = []
+
+    def push_scope(self):
+        self.scopes.append({})
+
+    def push_fun_scope(self, name):
+        self.fun_def_scopes.append(name)
+
+    def pop_scope(self):
+        self.scopes.pop()
+
+    def pop_fun_scope(self):
+        self.fun_def_scopes.pop()
+
+    def define_fun(self, name):
+        self.scopes[-1][name] = False
+
+    def resolve_fun(self, name):
+        for i in range(len(self.scopes)):
+            if name in self.scopes[-(i + 1)]:
+                return i
+        raise Exception(f'Failed to resolve function {name}')
+
+    def is_effective(self, name):
+        depth = self.resolve_fun(name)
+        return self.scopes[-(depth + 1)][name]
+
+    def run(self, statements):
+        for stmt in statements:
+            self.visit(stmt)
+
+    def visit_block(self, node):
+        self.push_scope()
+
+        for stmt in node.statements:
+            self.visit(stmt)
+
+        self.pop_scope()
+
+    def visit_function_def(self, node):
+        self.define_fun(node.name)
+        self.push_fun_scope(node.name)
+        try:
+            self.visit(node.body)
+        except EffectiveNodeSearch.Print:
+            depth = self.resolve_fun(node.name)
+            self.scopes[-(depth + 1)][node.name] = True
+        finally:
+            self.pop_fun_scope()
+
+    class Print(Exception):
+        pass
+
+    def visit_print_stmt(self, node):
+        if self.fun_def_scopes:
+            # Notify - currently defined function is effective
+            raise EffectiveNodeSearch.Print()
+        else:
+            # Top level print - an effective statement
+            self.effective_nodes.add(node)
+
+    def visit_variable_declaration(self, node):
+        if node.value:
+            self.visit(node.value)
+
+    def visit_assignment(self, node):
+        self.visit(node.value)
+
+    def visit_if_stmt(self, node):
+        self.visit(node.body)
+
+    def visit_while_stmt(self, node):
+        self.visit(node.body)
+
+    def visit_for_stmt(self, node):
+        self.visit(node.initializer)
+        self.visit(node.body)
+        self.visit(node.increment)
+
+    def visit_binary_expr(self, node):
+        self.visit(node.left)
+        self.visit(node.right)
+
+    def visit_unary_expr(self, node):
+        self.visit(node.expr)
+
+    def visit_return_stmt(self, node):
+        self.visit(node.expr)
+
+    def visit_call(self, node):
+        if self.is_effective(node.name):
+            self.effective_nodes.add(node)
+
+    def visit_variable(self, node):
+        pass
+
+    def visit_literal(self, node):
+        pass
+
+    def visit_unknown(self, m_name):
+        pass
+
+
 class Node:
     """Node of data dependency graph where edges correspond to Use-Define relations."""
     def __init__(self, node):
@@ -27,6 +143,7 @@ class RedundancyOptimizer(BaseVisitor):
             'function': {f: Node(None) for f in global_functions}
         }]
 
+
     def reset(self):
         self.mode = self.BUILD
         self.effective_nodes = set()
@@ -36,7 +153,10 @@ class RedundancyOptimizer(BaseVisitor):
         }]
 
     def push_scope(self):
-        self.scopes.append({'variable': {}, 'function': {}})
+        if self.mode == self.MARK:
+            self.effective_functions.append(set())
+        else:
+            self.scopes.append({'variable': {}, 'function': {}})
 
     def define(self, name, node, what):
         self.scopes[-1][what][name] = node
@@ -44,11 +164,14 @@ class RedundancyOptimizer(BaseVisitor):
     def resolve(self, name, what):
         for i in range(len(self.scopes)):
             if name in self.scopes[-(i + 1)][what]:
-                return self.scopes[-(i + 1)][what][name]
+                return i
         raise Exception(f'Failed to resolve {what} {name}')
 
     def pop_scope(self):
-        self.scopes.pop()
+        if self.mode == self.MARK:
+            self.effective_functions.pop()
+        else:
+            self.scopes.pop()
 
     def kill(self, kills):
         for name, node in kills:
@@ -56,13 +179,19 @@ class RedundancyOptimizer(BaseVisitor):
 
     def run(self, statements):
         if self.mode == self.BUILD:
-            # Build the dependency graph and find effective nodes
+            # Build the dependency graph
+            ext_statements = []
             for stmt in statements:
-                self.visit(stmt)
+                ext_statements.append(self.visit(stmt))
 
-            self.effective_nodes = self.extend_effective()
+            # Find all effective nodes
+            # TODO: fix effective node search...
+            # self.mode = self.MARK
+            # for stmt in ext_statements:
+            #     self.visit(stmt)
+            self.effective_nodes = self.extend()
 
-            # Prune redundant subtrees.
+            # Prune redundant subtrees
             self.mode = self.PRUNE
             effective_statements = [s for s in statements if s in self.effective_nodes]
             for stmt in effective_statements:
@@ -70,7 +199,7 @@ class RedundancyOptimizer(BaseVisitor):
 
             return effective_statements
 
-    def extend_effective(self):
+    def extend(self):
         def extend_inner(node):
             effective_ast_nodes.add(node.ast_node)
             for d in node.deps:
@@ -78,6 +207,7 @@ class RedundancyOptimizer(BaseVisitor):
                     extend_inner(d)
 
         effective_ast_nodes = set()
+
         for node in self.effective_nodes:
             extend_inner(node)
         return effective_ast_nodes
@@ -91,6 +221,12 @@ class RedundancyOptimizer(BaseVisitor):
                     self.visit(stmt)
             node.statements = remaining_statements
             return
+        elif self.mode == self.MARK:
+            self.push_scope()
+            for stmt in node.statements:
+                self.visit(stmt)
+            self.pop_scope()
+            return
 
         b_node = Node(node)
 
@@ -101,6 +237,7 @@ class RedundancyOptimizer(BaseVisitor):
                 n.deps.add(b_node)
                 b_node.kills.update(n.kills)
         except RedundancyOptimizer.Return as r:
+            b_node.kills.update(r.node.kills)
             b_node.deps.add(r.node)
         self.pop_scope()
 
@@ -109,6 +246,11 @@ class RedundancyOptimizer(BaseVisitor):
     def visit_function_def(self, node):
         if self.mode == self.PRUNE:
             self.visit(node.body)
+            return
+        elif self.mode == self.MARK:
+            self.cur_fun_def = node
+            self.visit(node.ast_node.body)
+            self.cur_fun_def = None
             return
 
         f_node = Node(node)
@@ -130,17 +272,27 @@ class RedundancyOptimizer(BaseVisitor):
     def visit_print_stmt(self, node):
         if self.mode == self.PRUNE:
             return
+        elif self.mode == self.MARK:
+            if self.cur_fun_def:
+                self.effective_functions[-1].add(self.cur_fun_def.name)
+            else:
+                self.effective_nodes.add(node)
 
         p_node = Node(node)
-        self.effective_nodes.add(p_node)
         n = self.visit(node.expr)
 
         p_node.deps.add(n)
         self.kill(n.kills)
+
+        self.effective_nodes.add(p_node)
         return p_node
 
     def visit_variable_declaration(self, node):
         if self.mode == self.PRUNE:
+            return
+        elif self.mode == self.MARK:
+            if node.value:
+                self.visit(node.value)
             return
 
         v_node = Node(node)
@@ -149,8 +301,6 @@ class RedundancyOptimizer(BaseVisitor):
             n = self.visit(node.value)
             v_node.deps.add(n)
             v_node.kills.update(n.kills)
-            v_node.kills.add((node.name, v_node))
-            self.kill(n.kills)
 
         self.define(node.name, v_node, 'variable')
         return v_node
@@ -158,13 +308,18 @@ class RedundancyOptimizer(BaseVisitor):
     def visit_assignment(self, node):
         if self.mode == self.PRUNE:
             return
+        elif self.mode == self.MARK:
+            self.visit(node.value)
+            return
 
         a_node = Node(node)
         n = self.visit(node.value)
 
         a_node.deps.add(n)
         a_node.kills.add((node.name, a_node))
-        self.define(node.name, a_node, 'variable')
+
+        depth = self.resolve(node.name, 'variable')
+        self.scopes[-(depth + 1)]['variable'][node.name] = a_node
 
         return a_node
 
@@ -172,6 +327,8 @@ class RedundancyOptimizer(BaseVisitor):
         if self.mode == self.PRUNE:
             self.visit(node.body)
             return
+        elif self.mode == self.MARK:
+            self.visit(node)
 
         i_node = Node(node)
         c_node = self.visit(node.condition)
@@ -192,10 +349,14 @@ class RedundancyOptimizer(BaseVisitor):
         c_node = self.visit(node.condition)
         w_node.deps.add(c_node)
 
-        b_node = self.visit(node.body)
-        b_node.deps.add(w_node)
+        from copy import deepcopy
+        scopy = [deepcopy(s) for s in self.scopes]
 
+        b_node = self.visit(node.body)
         w_node.kills.update(b_node.kills)
+        b_node.deps.add(w_node)
+        import pprint as pp
+        pp.pprint(b_node.kills)
 
         # Variables in loop condition depend on redefinitions in loop body!
         # TODO: separation of data dependencies from AST structure would do better?
@@ -203,11 +364,15 @@ class RedundancyOptimizer(BaseVisitor):
         for n in c_node.deps:
             if isinstance(n.ast_node, Variable):
                 cond_deps.add(n.ast_node.name)
-        print(cond_deps)
-        print(b_node.kills)
-        for name, node in b_node.kills:
+
+        for name, node in w_node.kills:
             if name in cond_deps:
                 c_node.deps.add(node)
+
+            # TODO:???
+            for sc in reversed(scopy):
+                if name in sc['variable']:
+                    sc['variable'][name].deps.add(node)
 
         return w_node
 
@@ -219,12 +384,14 @@ class RedundancyOptimizer(BaseVisitor):
         f_node = Node(node)
         self.push_scope()
 
+        init_node = self.visit(node.initializer)
+        c_node = self.visit(node.condition)
+        inc_node = self.visit(node.increment)
+
         b_node = self.visit(node.body)
         b_node.deps.add(f_node)
         f_node.deps.update({
-            self.visit(node.initializer),
-            self.visit(node.condition),
-            self.visit(node.increment),
+            init_node, c_node, inc_node
         })
 
         self.pop_scope()
@@ -277,9 +444,9 @@ class RedundancyOptimizer(BaseVisitor):
         for a in node.args:
             n = self.visit(a)
             c_node.deps.add(n)
-            self.kill(n.kills)
 
-        f_node = self.resolve(node.name, 'function')
+        f_depth = self.resolve(node.name, 'function')
+        f_node = self.scopes[-(f_depth + 1)]['function'][node.name]
         c_node.deps.add(f_node)
         self.kill(f_node.kills)
 
@@ -290,7 +457,8 @@ class RedundancyOptimizer(BaseVisitor):
             return
 
         v_node = Node(node)
-        value_node = self.resolve(node.name, 'variable')
+        v_depth = self.resolve(node.name, 'variable')
+        value_node = self.scopes[-(v_depth + 1)]['variable'][node.name]
         v_node.deps.add(value_node)
         return v_node
 
