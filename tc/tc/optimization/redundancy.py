@@ -5,11 +5,14 @@ from tc.parser import Variable
 global_functions = global_env().functions.keys()
 
 
-# HOW TO:
-#  - find top level statements with side effects:
-#    - top level 'print' statements
-#    - top level calls of functions with side effects
 class EffectiveNodeSearch(BaseVisitor):
+    """Finds top level statements with side effects.
+
+    These include:
+        - top level 'print' statements
+        - top level calls of functions with side effects
+    """
+
     def __init__(self):
         self.effective_nodes = set()
         self.scopes = [{}]
@@ -129,34 +132,23 @@ class Node:
         self.kills = set()  # set of (name, redefinition node that kills previous definition of name)
 
 
-class RedundancyOptimizer(BaseVisitor):
-    """Statically builds a use-def graph and removes redundant subtrees of input AST."""
-
-    BUILD = 0
-    PRUNE = 1
+class DefinitionReach(BaseVisitor):
+    """Statically builds a use-def graph."""
 
     def __init__(self):
-        self.mode = RedundancyOptimizer.BUILD
-        self.effective_nodes = set()
         self.scopes = [{
             'variable': {},
             'function': {f: Node(None) for f in global_functions}
         }]
 
-
     def reset(self):
-        self.mode = self.BUILD
-        self.effective_nodes = set()
         self.scopes = [{
             'variable': {},
             'function': {f: Node(None) for f in global_functions}
         }]
 
     def push_scope(self):
-        if self.mode == self.MARK:
-            self.effective_functions.append(set())
-        else:
-            self.scopes.append({'variable': {}, 'function': {}})
+        self.scopes.append({'variable': {}, 'function': {}})
 
     def define(self, name, node, what):
         self.scopes[-1][what][name] = node
@@ -168,66 +160,19 @@ class RedundancyOptimizer(BaseVisitor):
         raise Exception(f'Failed to resolve {what} {name}')
 
     def pop_scope(self):
-        if self.mode == self.MARK:
-            self.effective_functions.pop()
-        else:
-            self.scopes.pop()
+        self.scopes.pop()
 
     def kill(self, kills):
         for name, node in kills:
             self.scopes[-1]['variable'][name] = node
 
     def run(self, statements):
-        if self.mode == self.BUILD:
-            # Build the dependency graph
-            ext_statements = []
-            for stmt in statements:
-                ext_statements.append(self.visit(stmt))
-
-            # Find all effective nodes
-            # TODO: fix effective node search...
-            # self.mode = self.MARK
-            # for stmt in ext_statements:
-            #     self.visit(stmt)
-            self.effective_nodes = self.extend()
-
-            # Prune redundant subtrees
-            self.mode = self.PRUNE
-            effective_statements = [s for s in statements if s in self.effective_nodes]
-            for stmt in effective_statements:
-                self.visit(stmt)
-
-            return effective_statements
-
-    def extend(self):
-        def extend_inner(node):
-            effective_ast_nodes.add(node.ast_node)
-            for d in node.deps:
-                if d.ast_node not in effective_ast_nodes:  # not a DAG - e.g. while loops
-                    extend_inner(d)
-
-        effective_ast_nodes = set()
-
-        for node in self.effective_nodes:
-            extend_inner(node)
-        return effective_ast_nodes
+        # Build the dependency graph
+        ext_statements = []
+        for stmt in statements:
+            ext_statements.append(self.visit(stmt))
 
     def visit_block(self, node):
-        if self.mode == self.PRUNE:
-            remaining_statements = []
-            for stmt in node.statements:
-                if stmt in self.effective_nodes:
-                    remaining_statements.append(stmt)
-                    self.visit(stmt)
-            node.statements = remaining_statements
-            return
-        elif self.mode == self.MARK:
-            self.push_scope()
-            for stmt in node.statements:
-                self.visit(stmt)
-            self.pop_scope()
-            return
-
         b_node = Node(node)
 
         self.push_scope()
@@ -244,15 +189,6 @@ class RedundancyOptimizer(BaseVisitor):
         return b_node
 
     def visit_function_def(self, node):
-        if self.mode == self.PRUNE:
-            self.visit(node.body)
-            return
-        elif self.mode == self.MARK:
-            self.cur_fun_def = node
-            self.visit(node.ast_node.body)
-            self.cur_fun_def = None
-            return
-
         f_node = Node(node)
 
         self.push_scope()
@@ -270,14 +206,6 @@ class RedundancyOptimizer(BaseVisitor):
         return f_node
 
     def visit_print_stmt(self, node):
-        if self.mode == self.PRUNE:
-            return
-        elif self.mode == self.MARK:
-            if self.cur_fun_def:
-                self.effective_functions[-1].add(self.cur_fun_def.name)
-            else:
-                self.effective_nodes.add(node)
-
         p_node = Node(node)
         n = self.visit(node.expr)
 
@@ -288,13 +216,6 @@ class RedundancyOptimizer(BaseVisitor):
         return p_node
 
     def visit_variable_declaration(self, node):
-        if self.mode == self.PRUNE:
-            return
-        elif self.mode == self.MARK:
-            if node.value:
-                self.visit(node.value)
-            return
-
         v_node = Node(node)
 
         if node.value:
@@ -306,12 +227,6 @@ class RedundancyOptimizer(BaseVisitor):
         return v_node
 
     def visit_assignment(self, node):
-        if self.mode == self.PRUNE:
-            return
-        elif self.mode == self.MARK:
-            self.visit(node.value)
-            return
-
         a_node = Node(node)
         n = self.visit(node.value)
 
@@ -324,12 +239,6 @@ class RedundancyOptimizer(BaseVisitor):
         return a_node
 
     def visit_if_stmt(self, node):
-        if self.mode == self.PRUNE:
-            self.visit(node.body)
-            return
-        elif self.mode == self.MARK:
-            self.visit(node)
-
         i_node = Node(node)
         c_node = self.visit(node.condition)
         i_node.deps.add(c_node)
@@ -341,10 +250,6 @@ class RedundancyOptimizer(BaseVisitor):
         return i_node
 
     def visit_while_stmt(self, node):
-        if self.mode == self.PRUNE:
-            self.visit(node.body)
-            return
-
         w_node = Node(node)
         c_node = self.visit(node.condition)
         w_node.deps.add(c_node)
@@ -377,10 +282,6 @@ class RedundancyOptimizer(BaseVisitor):
         return w_node
 
     def visit_for_stmt(self, node):
-        if self.mode == self.PRUNE:
-            self.visit(node.body)
-            return
-
         f_node = Node(node)
         self.push_scope()
 
@@ -398,9 +299,6 @@ class RedundancyOptimizer(BaseVisitor):
         return f_node
 
     def visit_binary_expr(self, node):
-        if self.mode == self.PRUNE:
-            return
-
         b_node = Node(node)
         l_node = self.visit(node.left)
         r_node = self.visit(node.right)
@@ -410,9 +308,6 @@ class RedundancyOptimizer(BaseVisitor):
         return b_node
 
     def visit_unary_expr(self, node):
-        if self.mode == self.PRUNE:
-            return
-
         u_node = Node(node)
         e_node = self.visit(node.expr)
 
@@ -426,9 +321,6 @@ class RedundancyOptimizer(BaseVisitor):
             self.node = return_node
 
     def visit_return_stmt(self, node):
-        if self.mode == self.PRUNE:
-            return
-
         r_node = Node(node)
         e_node = self.visit(node.expr)
         r_node.deps.add(e_node)
@@ -436,9 +328,6 @@ class RedundancyOptimizer(BaseVisitor):
         raise RedundancyOptimizer.Return(r_node)
 
     def visit_call(self, node):
-        if self.mode == self.PRUNE:
-            return
-
         c_node = Node(node)
 
         for a in node.args:
@@ -453,9 +342,6 @@ class RedundancyOptimizer(BaseVisitor):
         return c_node
 
     def visit_variable(self, node):
-        if self.mode == self.PRUNE:
-            return
-
         v_node = Node(node)
         v_depth = self.resolve(node.name, 'variable')
         value_node = self.scopes[-(v_depth + 1)]['variable'][node.name]
@@ -463,10 +349,76 @@ class RedundancyOptimizer(BaseVisitor):
         return v_node
 
     def visit_literal(self, node):
-        if self.mode == self.PRUNE:
-            return
-
         return Node(node)
 
     def visit_unknown(self, m_name):
         pass
+
+
+class RedundancyOptimizer(BaseVisitor):
+    """Removes redundant subtrees of input AST."""
+
+    def __init__(self):
+        self.effective_search = EffectiveNodeSearch()
+        self.def_reach = DefinitionReach()
+
+    def reset(self):
+        self.effective_search.reset()
+        self.def_reach.reset()
+
+    def run(self, statements):
+        # Build the dependency graph
+        ext_statements = []
+        for stmt in statements:
+            ext_statements.append(self.visit(stmt))
+
+        # Find all effective nodes
+        search = EffectiveNodeSearch()
+        for stmt in statements:
+            search.run(stmt)
+        self.effective_nodes = self.extend(search.effective_nodes)
+
+        # Prune redundant subtrees
+        self.mode = self.PRUNE
+        effective_statements = [s for s in statements if s in self.effective_nodes]
+        for stmt in effective_statements:
+            self.visit(stmt)
+
+        return effective_statements
+
+    # TODO: effective_nodes are from AST, not dep graph
+    def extend(self, effective_nodes):
+        def extend_inner(node):
+            effective_ast_nodes.add(node.ast_node)
+            for d in node.deps:
+                if d.ast_node not in effective_ast_nodes:  # not a DAG - e.g. while loops
+                    extend_inner(d)
+
+        effective_ast_nodes = set()
+
+        for node in self.effective_nodes:
+            extend_inner(node)
+        return effective_ast_nodes
+
+    def visit_block(self, node):
+        remaining_statements = []
+        for stmt in node.statements:
+            if stmt in self.effective_nodes:
+                remaining_statements.append(stmt)
+                self.visit(stmt)
+        node.statements = remaining_statements
+
+    def visit_function_def(self, node):
+        self.visit(node.body)
+
+    def visit_if_stmt(self, node):
+        self.visit(node.body)
+
+    def visit_while_stmt(self, node):
+        self.visit(node.body)
+
+    def visit_for_stmt(self, node):
+        self.visit(node.body)
+
+    def visit_unknown(self, m_name):
+        return
