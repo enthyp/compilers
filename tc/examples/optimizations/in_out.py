@@ -1,6 +1,6 @@
 from pprint import pprint
 from tc import Parser
-from tc.optimization.redundancy import GenKillBuilder
+from tc.optimization.redundancy import GenKillBuilder, InOutBuilder
 
 example1 = """
     var x : int = 1;
@@ -36,6 +36,26 @@ example3 = """
     fun(10)
 """
 
+example4 = """
+    var n : int = 10;
+
+    def fib(n : int) : int {
+        var a : int = 1;
+        var b : int = 1;
+        var i : int = 1;
+        while (i n <) {
+            print b;
+            var tmp : int = a;
+            a = b;
+            b = tmp b +;
+            i = i 1 +
+        }
+        return b
+    }
+
+    print fib(n)
+"""
+
 
 def run(example):
     parser = Parser()
@@ -44,8 +64,14 @@ def run(example):
     builder = GenKillBuilder()
     gen, kill = builder.run(ast)
 
-    pprint(gen)
-    pprint(kill)
+    # pprint(gen)
+    # pprint(kill)
+
+    io_builder = InOutBuilder(gen, kill)
+    in_sets, out_sets = io_builder.run(ast)
+
+    pprint(in_sets)
+    pprint(out_sets)
 
 
-run(example3)
+run(example2)

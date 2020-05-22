@@ -2,7 +2,6 @@ from collections import defaultdict
 from contextlib import contextmanager
 from tc.common import BaseVisitor
 from tc.globals import global_env
-from tc.parser import Variable
 
 global_functions = global_env().functions.keys()
 
@@ -340,6 +339,129 @@ class GenKillBuilder(BaseVisitor):
     def visit_literal(self, node):
         self.gen[node] = set()
         self.kill[node] = set()
+
+    def visit_unknown(self, m_name):
+        pass
+
+
+class InOutBuilder(BaseVisitor):
+    """Statically determines IN and OUT sets for each node of the AST.
+
+    We are specifically interested in IN sets at each node, because they contain all reachable variable
+    definitions for nodes and allow us to follow the Use-Definition chains.
+
+    """
+
+    def __init__(self, gen, kill):
+        self.in_sets = {}
+        self.out_sets = {}
+        self.gen = gen
+        self.kill = kill
+
+    def reset(self):
+        self.in_sets = {}
+        self.out_sets = {}
+
+    def run(self, statements):
+        self.in_sets[TOP] = set()
+        self.out_sets[TOP] = self.visit_statements(statements, self.in_sets[TOP])
+        return self.in_sets, self.out_sets
+
+    def visit_statements(self, statements, in_set):
+        self.in_sets[statements[0]] = in_set
+
+        for i, stmt in enumerate(statements[:-1]):
+            self.visit(stmt)
+            self.in_sets[statements[i + 1]] = self.out_sets[stmt]
+
+        self.visit(statements[-1])
+
+        return self.out_sets[statements[-1]]
+
+    def transfer(self, node):
+        # Classic
+        self.out_sets[node] = self.gen[node] | (self.in_sets[node] - self.kill[node])
+
+    def visit_block(self, node):
+        self.visit_statements(node.statements, self.in_sets[node])
+        self.transfer(node)
+
+    def visit_function_def(self, node):
+        self.in_sets[node.body] = self.in_sets[node]
+        self.visit(node.body)
+        self.transfer(node)
+
+    def visit_variable_declaration(self, node):
+        if node.value:
+            self.in_sets[node.value] = self.in_sets[node]
+            self.visit(node.value)
+        self.transfer(node)
+
+    def visit_assignment(self, node):
+        self.in_sets[node.value] = self.in_sets[node]
+        self.visit(node.value)
+        self.transfer(node)
+
+    def visit_print_stmt(self, node):
+        self.in_sets[node.expr] = self.in_sets[node]
+        self.visit(node.expr)
+        self.transfer(node)
+
+    def visit_if_stmt(self, node):
+        self.in_sets[node.condition] = self.in_sets[node]
+        self.visit(node.condition)
+
+        self.in_sets[node.body] = self.out_sets[node.condition]
+        self.visit(node.body)
+        self.out_sets[node] = self.out_sets[node.condition] | self.out_sets[node.body]
+
+    def visit_while_stmt(self, node):
+        self.in_sets[node.condition] = self.in_sets[node] | self.gen[node.body]
+        self.visit(node.condition)
+
+        self.in_sets[node.body] = self.out_sets[node.condition]
+        self.visit(node.body)
+        self.out_sets[node] = self.out_sets[node.condition] | self.out_sets[node.body]
+
+    def visit_for_stmt(self, node):
+        self.in_sets[node.initializer] = self.in_sets[node]
+        self.visit(node.initializer)
+
+        self.in_sets[node.condition] = self.out_sets[node.initializer] | self.gen[node.increment]
+        self.visit(node.condition)
+
+        self.in_sets[node.body] = self.out_sets[node.condition]
+        self.visit(node.body)
+
+        self.in_sets[node.increment] = self.out_sets[node.body]
+        self.visit(node.increment)
+        self.out_sets[node] = (
+            self.out_sets[node.condition] | self.out_sets[node.body]
+        )
+
+    def visit_binary_expr(self, node):
+        stmt_list = [node.left, node.right]
+        self.out_sets[node] = self.visit_statements(stmt_list, self.in_sets[node])
+
+    def visit_unary_expr(self, node):
+        self.in_sets[node.expr] = self.in_sets[node]
+        self.visit(node.expr)
+        self.transfer(node)
+
+    def visit_return_stmt(self, node):
+        self.in_sets[node.expr] = self.in_sets[node]
+        self.visit(node.expr)
+        self.transfer(node)
+
+    def visit_call(self, node):
+        self.visit_statements(node.args, self.in_sets[node])
+        self.transfer(node)
+
+    def visit_variable(self, node):
+        self.transfer(node)
+
+    def visit_literal(self, node):
+        self.transfer(node)  # not really necessary
 
     def visit_unknown(self, m_name):
         pass
