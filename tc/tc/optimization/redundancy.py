@@ -220,7 +220,8 @@ class GenKillBuilder(BaseVisitor):
 
     def run(self, statements):
         self.gather_defs(statements)
-        return self.visit_statements(statements)
+        self.gen[TOP], self.kill[TOP] = self.visit_statements(statements)
+        return self.gen, self.kill
 
     def gather_defs(self, statements):
         locator = VarDefLocator()

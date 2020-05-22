@@ -1,13 +1,15 @@
 import ply.lex as lex
 import ply.yacc as yacc
+import typing
+from dataclasses import dataclass
 from tc.common import Type
 
 
 # All possible nodes of the abstract syntax tree.
+@dataclass(eq=False)
 class Assignment:
-    def __init__(self, name, value):
-        self.name = name
-        self.value = value
+    name: str
+    value: typing.Any
 
 
 class BinaryExpr:
@@ -51,10 +53,13 @@ class IfStmt:
         self.body = body
 
 
+@dataclass(eq=False)
 class Literal:
-    def __init__(self, value, type):
-        self.value = value
-        self.type = type
+    value: typing.Union[str, int, float, bool]
+    type: typing.Any
+
+    def __repr__(self):
+        return f'Literal(value={self.value})'
 
 
 class Parameter:
@@ -79,17 +84,23 @@ class UnaryExpr:
         self.expr = expr
 
 
+@dataclass(eq=False)
 class Variable:
-    def __init__(self, name):
-        self.name = name
-        self.scope_depth = None
+    name: str
+    scope_depth: int = None
+
+    def __repr__(self):
+        return f'Variable(name={self.name})'
 
 
+@dataclass(eq=False)
 class VariableDeclaration:
-    def __init__(self, name, type, value):
-        self.name = name
-        self.type = type
-        self.value = value
+    name: str
+    type: typing.Any
+    value: typing.Any
+
+    def __repr__(self):
+        return f'VariableDeclaration(name={self.name}, value={self.value})'
 
 
 class WhileStmt:
