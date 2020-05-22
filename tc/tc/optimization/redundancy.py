@@ -1,41 +1,51 @@
-from collections import defaultdict
 from contextlib import contextmanager
 from tc.common import BaseVisitor
-from tc.globals import global_env
-
-global_functions = global_env().functions.keys()
+from tc.optimization.common import GenKillBuilder, InOutBuilder
 
 
+# HOW TO:
+#  - find functions with side effects:
+#    - ones that contain 'print' statements
+#    - ones that call functions with side effects
+#  - for these functions find return nodes and effective statements (link to functions)
+#    - at the same time you can find top-level effective statements
+#  - for all top-level effective statements follow Use-Define chains to gather all effective nodes
 class EffectiveNodeSearch(BaseVisitor):
-    """Finds top level statements with side effects.
+    """Finds nodes necessary to trigger all side effects."""
 
-    These include:
-        - top level 'print' statements
-        - top level calls of functions with side effects
-        - TODO: return statements of functions called in effective nodes
-    """
+    def __init__(self, in_sets, out_sets):
+        self.in_sets = in_sets
+        self.out_sets = out_sets
 
-    def __init__(self):
+        # TODO: could be split into two visitors (yeah, dozens of visitors)
+        self.follow = False  # follow Use-Definition chains
         self.effective_nodes = set()
+        self.effective_fun_def_nodes = {}
         self.scopes = [{}]
         self.fun_def_scopes = []
 
     def reset(self):
+        self.follow = False
         self.effective_nodes = set()
         self.scopes = [{}]
         self.fun_def_scopes = []
 
-    def push_scope(self):
-        self.scopes.append({})
+    @contextmanager
+    def in_scope(self):
+        try:
+            self.scopes.append({})
+            yield
+        finally:
+            self.scopes.pop()
 
-    def push_fun_scope(self, name):
-        self.fun_def_scopes.append(name)
-
-    def pop_scope(self):
-        self.scopes.pop()
-
-    def pop_fun_scope(self):
-        self.fun_def_scopes.pop()
+    @contextmanager
+    def in_fun_def(self, name):
+        try:
+            self.scopes[-1][name] = {'is_effective': False, 'effective_nodes': set()}
+            self.fun_def_scopes.append(name)
+            yield
+        finally:
+            self.fun_def_scopes.pop()
 
     def define_fun(self, name):
         self.scopes[-1][name] = False
@@ -46,7 +56,7 @@ class EffectiveNodeSearch(BaseVisitor):
                 return i
         raise Exception(f'Failed to resolve function {name}')
 
-    def is_effective(self, name):
+    def get_fun_info(self, name):
         depth = self.resolve_fun(name)
         return self.scopes[-(depth + 1)][name]
 
@@ -54,180 +64,228 @@ class EffectiveNodeSearch(BaseVisitor):
         for stmt in statements:
             self.visit(stmt)
 
+        self.follow = True
+        for stmt in statements:
+            if stmt in self.effective_nodes:
+                self.visit(stmt)
+
+        return self.effective_nodes
+
     def visit_block(self, node):
-        self.push_scope()
-
-        for stmt in node.statements:
-            self.visit(stmt)
-
-        self.pop_scope()
+        with self.in_scope():
+            for stmt in node.statements:
+                self.visit(stmt)
+                if stmt in self.effective_nodes:
+                    self.effective_nodes.add(node)
 
     def visit_function_def(self, node):
-        self.define_fun(node.name)
-        self.push_fun_scope(node.name)
-        try:
+        with self.in_fun_def(node.name):
             self.visit(node.body)
-        except EffectiveNodeSearch.Print:
-            depth = self.resolve_fun(node.name)
-            self.scopes[-(depth + 1)][node.name] = True
-        finally:
-            self.pop_fun_scope()
-
-    class Print(Exception):
-        pass
 
     def visit_print_stmt(self, node):
+        self.visit(node.expr)
+
+        if self.follow:
+            return
+
         if self.fun_def_scopes:
-            # Notify - currently defined function is effective
-            raise EffectiveNodeSearch.Print()
+            cur_function = self.fun_def_scopes[-1]
+            info = self.get_fun_info(cur_function)
+            info['is_effective'] = True
+            info['effective_nodes'].add(node)
         else:
             # Top level print - an effective statement
             self.effective_nodes.add(node)
 
     def visit_variable_declaration(self, node):
+        if self.follow:
+            self.effective_nodes.add(node)
+            self.visit(node.value)
+            return
+
         if node.value:
             self.visit(node.value)
 
+            if self.fun_def_scopes:
+                return
+
+            if node.value in self.effective_nodes:
+                self.effective_nodes.add(node)
+
     def visit_assignment(self, node):
+        if self.follow:
+            self.effective_nodes.add(node)
+            self.visit(node.value)
+            return
+
         self.visit(node.value)
 
+        if self.fun_def_scopes:
+            return
+
+        if node.value in self.effective_nodes:
+            self.effective_nodes.add(node)
+
     def visit_if_stmt(self, node):
+        if self.follow:
+            self.visit(node.condition)
+            self.visit(node.body)
+            return
+
+        self.visit(node.condition)
         self.visit(node.body)
+
+        if self.fun_def_scopes:
+            return
+
+        if node.condition in self.effective_nodes or node.body in self.effective_nodes:
+            self.effective_nodes.add(node)
 
     def visit_while_stmt(self, node):
+        if self.follow:
+            self.visit(node.condition)
+            self.visit(node.body)
+            return
+
+        self.visit(node.condition)
         self.visit(node.body)
 
+        if self.fun_def_scopes:
+            return
+
+        if node.condition in self.effective_nodes or node.body in self.effective_nodes:
+            self.effective_nodes.add(node)
+
     def visit_for_stmt(self, node):
+        if self.follow:
+            self.visit(node.initializer)
+            self.visit(node.condition)
+            self.visit(node.body)
+            self.visit(node.increment)
+            return
+
         self.visit(node.initializer)
+        self.visit(node.condition)
         self.visit(node.body)
         self.visit(node.increment)
 
+        if self.fun_def_scopes:
+            return
+
+        if (
+            node.initializer in self.effective_nodes or
+            node.body in self.effective_nodes or
+            node.condition in self.effective_nodes or
+            node.increment in self.effective_nodes
+        ):
+            self.effective_nodes.add(node)
+
     def visit_binary_expr(self, node):
+        if self.follow:
+            self.effective_nodes.add(node)
+            self.visit(node.left)
+            self.visit(node.right)
+            return
+
         self.visit(node.left)
         self.visit(node.right)
 
-    def visit_unary_expr(self, node):
-        self.visit(node.expr)
+        if self.fun_def_scopes:
+            return
 
-    def visit_return_stmt(self, node):
-        self.visit(node.expr)
-
-    def visit_call(self, node):
-        if self.is_effective(node.name):
+        if node.left in self.effective_nodes or node.right in self.effective_nodes:
             self.effective_nodes.add(node)
 
+    def visit_unary_expr(self, node):
+        if self.follow:
+            self.effective_nodes.add(node)
+            self.visit(node.expr)
+            return
+
+        self.visit(node.expr)
+
+        if self.fun_def_scopes:
+            return
+
+        if node.expr in self.effective_nodes:
+            self.effective_nodes.add(node)
+
+    def visit_return_stmt(self, node):
+        if self.follow:
+            self.effective_nodes.add(node)
+            self.visit(node.expr)
+            return
+
+        if self.fun_def_scopes:
+            self.visit(node.expr)
+            cur_function = self.fun_def_scopes[-1]
+            info = self.get_fun_info(cur_function)
+            info['effective_nodes'].add(node)
+        else:
+            raise Exception('Return statement outside of funtion!')
+
+    def visit_call(self, node):
+        if self.follow:
+            self.effective_nodes.add(node)
+
+            for a in node.args:
+                self.visit(a)
+
+            # Enter function body in effective node points.
+            effective_nodes = self.effective_fun_def_nodes[node]
+            for node in effective_nodes:
+                self.visit(node)
+
+            return
+
+        for a in node.args:
+            self.visit(a)
+
+        info = self.get_fun_info(node.name)
+        self.effective_fun_def_nodes[node] = info['effective_nodes']
+
+        if info['is_effective']:
+            if self.fun_def_scopes:
+                cur_function = self.fun_def_scopes[-1]
+                info = self.get_fun_info(cur_function)
+                info['is_effective'] = True
+                info['effective_nodes'].add(node)
+            else:
+                self.effective_nodes.add(node)
+                # TODO: add function def node to effective
+
+    def visit_variable(self, node):
+        if self.follow:
+            if node in self.effective_nodes:
+                return
+
+            self.effective_nodes.add(node)
+
+            in_set = self.in_sets[node]
+            for n in in_set:
+                if n.name == node.name:
+                    self.visit(n)
+
     def visit_unknown(self, m_name):
         pass
 
 
-TOP = 'PROGRAM'
-
-
-class VarDefLocator(BaseVisitor):
-    """Finds all variable declarations/assignments in the program."""
-
-    def __init__(self):
-        self.defs = set()
-
-    def reset(self):
-        self.defs = set()
+class RedundancyOptimizer(BaseVisitor):
+    """Removes all subtrees of input AST that do not contain effective nodes."""
 
     def run(self, statements):
-        for stmt in statements:
-            self.visit(stmt)
-        return self.defs
+        # Build IN and OUT sets
+        gen, kill = GenKillBuilder().run(statements)
+        in_sets, out_sets = InOutBuilder(gen, kill).run(statements)
 
-    def visit_block(self, node):
-        for stmt in node.statements:
-            self.visit(stmt)
+        # Find all effective nodes of the AST
+        effective_nodes = EffectiveNodeSearch(in_sets, out_sets).run(statements)
 
-    def visit_function_def(self, node):
-        for p in node.parameters:
-            self.visit(p)
-        self.visit(node.body)
+        # Prune redundant nodes
+        for node in effective_nodes:
+            self.visit_statements(node)
 
-    def visit_variable_declaration(self, node):
-        self.defs.add(node)
-
-    def visit_assignment(self, node):
-        self.defs.add(node)
-
-    def visit_if_stmt(self, node):
-        self.visit(node.body)
-
-    def visit_while_stmt(self, node):
-        self.visit(node.body)
-
-    def visit_for_stmt(self, node):
-        self.visit(node.initializer)
-        self.visit(node.increment)
-        self.visit(node.body)
-
-    def visit_unknown(self, m_name):
-        pass
-
-
-class GenKillBuilder(BaseVisitor):
-    """Statically determines GEN and KILL sets of variable definition nodes for each node of the AST.
-
-    Importantly, we use very crude approximation of GEN and KILL sets for scoped blocks. For GEN sets, we
-    simply take GEN of the inner block statements (so we disregard fact that GENs like inner variable
-    declarations can't be visible outside), which is a blown-up upper bound. For KILL, we take an empty
-    set as a lower bound, so we disregard fact that assignments to outer scope variables are legitimate
-    KILLs.
-
-    TODO: use stack of scopes to approximate them better
-    TODO: 'return' statement should only appear at the end of a block?
-
-    Attributes:
-        var_defs (dict): map (name -> set of Assignment/VariableDeclaration nodes) - all variable
-            definitions in the whole program
-        scopes (list): stack of scopes, in each we store GEN and KILL sets that shall be assigned to
-            Call nodes for functions present in scope
-        gen (dict): map (AST node -> set of Assignment/VariableDeclaration nodes) - all definitions of
-            variables (assignments or declarations) WITHIN given node that reach the endpoint of this
-            node
-        kill (dict): map (AST node -> set of Assignment/VariableDeclaration nodes) - all definitions
-            of variables within/outside given node that do not reach the endpoint of this node due to
-            reassignment or redeclaration
-    """
-
-    def __init__(self):
-        self.var_defs = defaultdict(set)
-        self.scopes = [{}]
-        self.gen = {}
-        self.kill = {}
-
-    def reset(self):
-        self.var_defs = defaultdict(set)
-        self.scopes = [{}]
-        self.gen = {}
-        self.kill = {}
-
-    @contextmanager
-    def in_scope(self):
-        try:
-            self.scopes.append({})
-            yield
-        finally:
-            self.scopes.pop()
-
-    def resolve(self, name):
-        for scope in reversed(self.scopes):
-            if name in scope:
-                return scope[name]
-        raise Exception(f'Failed to resolve function {name}')
-
-    def run(self, statements):
-        self.gather_defs(statements)
-        self.gen[TOP], self.kill[TOP] = self.visit_statements(statements)
-        return self.gen, self.kill
-
-    def gather_defs(self, statements):
-        locator = VarDefLocator()
-        def_nodes = locator.run(statements)
-        for node in def_nodes:
-            self.var_defs[node.name].add(node)
+        return statements
 
     def visit_statements(self, statements):
         gen, kill = set(), set()
@@ -342,201 +400,3 @@ class GenKillBuilder(BaseVisitor):
 
     def visit_unknown(self, m_name):
         pass
-
-
-class InOutBuilder(BaseVisitor):
-    """Statically determines IN and OUT sets for each node of the AST.
-
-    We are specifically interested in IN sets at each node, because they contain all reachable variable
-    definitions for nodes and allow us to follow the Use-Definition chains.
-
-    """
-
-    def __init__(self, gen, kill):
-        self.in_sets = {}
-        self.out_sets = {}
-        self.gen = gen
-        self.kill = kill
-
-    def reset(self):
-        self.in_sets = {}
-        self.out_sets = {}
-
-    def run(self, statements):
-        self.in_sets[TOP] = set()
-        self.out_sets[TOP] = self.visit_statements(statements, self.in_sets[TOP])
-        return self.in_sets, self.out_sets
-
-    def visit_statements(self, statements, in_set):
-        self.in_sets[statements[0]] = in_set
-
-        for i, stmt in enumerate(statements[:-1]):
-            self.visit(stmt)
-            self.in_sets[statements[i + 1]] = self.out_sets[stmt]
-
-        self.visit(statements[-1])
-
-        return self.out_sets[statements[-1]]
-
-    def transfer(self, node):
-        # Classic
-        self.out_sets[node] = self.gen[node] | (self.in_sets[node] - self.kill[node])
-
-    def visit_block(self, node):
-        self.visit_statements(node.statements, self.in_sets[node])
-        self.transfer(node)
-
-    def visit_function_def(self, node):
-        self.in_sets[node.body] = self.in_sets[node]
-        self.visit(node.body)
-        self.transfer(node)
-
-    def visit_variable_declaration(self, node):
-        if node.value:
-            self.in_sets[node.value] = self.in_sets[node]
-            self.visit(node.value)
-        self.transfer(node)
-
-    def visit_assignment(self, node):
-        self.in_sets[node.value] = self.in_sets[node]
-        self.visit(node.value)
-        self.transfer(node)
-
-    def visit_print_stmt(self, node):
-        self.in_sets[node.expr] = self.in_sets[node]
-        self.visit(node.expr)
-        self.transfer(node)
-
-    def visit_if_stmt(self, node):
-        self.in_sets[node.condition] = self.in_sets[node]
-        self.visit(node.condition)
-
-        self.in_sets[node.body] = self.out_sets[node.condition]
-        self.visit(node.body)
-        self.out_sets[node] = self.out_sets[node.condition] | self.out_sets[node.body]
-
-    def visit_while_stmt(self, node):
-        self.in_sets[node.condition] = self.in_sets[node] | self.gen[node.body]
-        self.visit(node.condition)
-
-        self.in_sets[node.body] = self.out_sets[node.condition]
-        self.visit(node.body)
-        self.out_sets[node] = self.out_sets[node.condition] | self.out_sets[node.body]
-
-    def visit_for_stmt(self, node):
-        self.in_sets[node.initializer] = self.in_sets[node]
-        self.visit(node.initializer)
-
-        self.in_sets[node.condition] = self.out_sets[node.initializer] | self.gen[node.increment]
-        self.visit(node.condition)
-
-        self.in_sets[node.body] = self.out_sets[node.condition]
-        self.visit(node.body)
-
-        self.in_sets[node.increment] = self.out_sets[node.body]
-        self.visit(node.increment)
-        self.out_sets[node] = (
-            self.out_sets[node.condition] | self.out_sets[node.body]
-        )
-
-    def visit_binary_expr(self, node):
-        stmt_list = [node.left, node.right]
-        self.out_sets[node] = self.visit_statements(stmt_list, self.in_sets[node])
-
-    def visit_unary_expr(self, node):
-        self.in_sets[node.expr] = self.in_sets[node]
-        self.visit(node.expr)
-        self.transfer(node)
-
-    def visit_return_stmt(self, node):
-        self.in_sets[node.expr] = self.in_sets[node]
-        self.visit(node.expr)
-        self.transfer(node)
-
-    def visit_call(self, node):
-        self.visit_statements(node.args, self.in_sets[node])
-        self.transfer(node)
-
-    def visit_variable(self, node):
-        self.transfer(node)
-
-    def visit_literal(self, node):
-        self.transfer(node)  # not really necessary
-
-    def visit_unknown(self, m_name):
-        pass
-
-
-class RedundancyOptimizer(BaseVisitor):
-    """Removes redundant subtrees of input AST."""
-
-    def __init__(self):
-        self.effective_search = EffectiveNodeSearch()
-        self.use_def = GenKillBuilder()
-
-    def reset(self):
-        self.effective_search.reset()
-        self.use_def.reset()
-
-    def run(self, statements):
-        # TODO:
-        #  - find effective nodes
-        #  - build use-def table
-        #  - traverse AST from effective nodes via use-def table to find all required nodes
-        #  - prune all nodes that were not found required
-
-        # Build the dependency graph
-        ext_statements = []
-        for stmt in statements:
-            ext_statements.append(self.visit(stmt))
-
-        # Find all effective nodes
-        search = EffectiveNodeSearch()
-        for stmt in statements:
-            search.run(stmt)
-        self.effective_nodes = self.extend(search.effective_nodes)
-
-        # Prune redundant subtrees
-        self.mode = self.PRUNE
-        effective_statements = [s for s in statements if s in self.effective_nodes]
-        for stmt in effective_statements:
-            self.visit(stmt)
-
-        return effective_statements
-
-    # TODO: effective_nodes are from AST, not dep graph
-    def extend(self, effective_nodes):
-        def extend_inner(node):
-            effective_ast_nodes.add(node.ast_node)
-            for d in node.deps:
-                if d.ast_node not in effective_ast_nodes:  # not a DAG - e.g. while loops
-                    extend_inner(d)
-
-        effective_ast_nodes = set()
-
-        for node in self.effective_nodes:
-            extend_inner(node)
-        return effective_ast_nodes
-
-    def visit_block(self, node):
-        remaining_statements = []
-        for stmt in node.statements:
-            if stmt in self.effective_nodes:
-                remaining_statements.append(stmt)
-                self.visit(stmt)
-        node.statements = remaining_statements
-
-    def visit_function_def(self, node):
-        self.visit(node.body)
-
-    def visit_if_stmt(self, node):
-        self.visit(node.body)
-
-    def visit_while_stmt(self, node):
-        self.visit(node.body)
-
-    def visit_for_stmt(self, node):
-        self.visit(node.body)
-
-    def visit_unknown(self, m_name):
-        return

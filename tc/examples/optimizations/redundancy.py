@@ -1,6 +1,5 @@
-from tc import Parser, PrettyPrinter
-from tc.optimization import RedundancyOptimizer
-from tc.optimization.redundancy import EffectiveNodeSearch
+from tc import Parser
+from tc.optimization.redundancy import EffectiveNodeSearch, GenKillBuilder, InOutBuilder
 
 
 example1 = """
@@ -81,15 +80,30 @@ example7 = """
         print 'Hello from global scope, ' name +
     }
 
-    {
-        def fun(name: string) {
-            print 'Hello from inner scope, ' name +
-        }
-
-        fun(name);  # inner
-    }
+    # {
+    #     def fun(name: string) {
+    #         print 'Hello from inner scope, ' name +
+    #     }
+    # 
+    #     fun(name);  # inner
+    # }
 
     fun(name)       # global
+"""
+
+example8 = """
+    def useful() : int {
+        print "totally useless";
+        return 1
+    }
+    var x : int = 1;
+    
+    # certainly should remain here
+    useful();  
+    
+    # guess it should stay - may be called for side effects, forgot to use return value
+    var y : int = useful();  
+    print x
 """
 
 
@@ -103,17 +117,30 @@ def run(example, name):
     # optimizer = RedundancyOptimizer()
     # ast_root = optimizer.run(ast_root)
 
-    search = EffectiveNodeSearch()
-    search.run(ast_root)
+    builder = GenKillBuilder()
+    gen, kill = builder.run(ast_root)
+
+    # pprint(gen)
+    # pprint(kill)
+
+    io_builder = InOutBuilder(gen, kill)
+    in_sets, out_sets = io_builder.run(ast_root)
+    effective_nodes = EffectiveNodeSearch(in_sets, out_sets).run(ast_root)
+
     import pprint as pp
-    pp.pprint(search.effective_nodes)
+    #pp.pprint(in_sets)
+    #pp.pprint(out_sets)
+    pp.pprint(effective_nodes)
 
     # pprint = PrettyPrinter()
     # pprint.run(ast_root, f'out/{name}', view=True)
 
 
+# run(example1, 'redundancy_1')
+# run(example2, 'redundancy_2')
 # run(example3, 'redundancy3')
 # run(example4, 'redundancy_while')
 # run(example5, 'redundancy_fib')
 # run(example6, 'redundancy_blocks')
 run(example7, 'redundancy_fun')
+# run(example8, 'redundancy_fun2')
