@@ -80,13 +80,13 @@ example7 = """
         print 'Hello from global scope, ' name +
     }
 
-    # {
-    #     def fun(name: string) {
-    #         print 'Hello from inner scope, ' name +
-    #     }
-    # 
-    #     fun(name);  # inner
-    # }
+    {
+        def fun2(name: string) {
+            print 'Hello from inner scope, ' name +
+        }
+
+        fun(name);  # inner
+    }
 
     fun(name)       # global
 """
@@ -103,7 +103,8 @@ example8 = """
     
     # guess it should stay - may be called for side effects, forgot to use return value
     var y : int = useful();  
-    print x
+    print x;
+    y = y 2 +
 """
 
 
@@ -142,5 +143,5 @@ def run(example, name):
 # run(example4, 'redundancy_while')
 # run(example5, 'redundancy_fib')
 # run(example6, 'redundancy_blocks')
-run(example7, 'redundancy_fun')
-# run(example8, 'redundancy_fun2')
+# run(example7, 'redundancy_fun')
+run(example8, 'redundancy_fun2')

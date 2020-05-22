@@ -20,6 +20,7 @@ class EffectiveNodeSearch(BaseVisitor):
         # TODO: could be split into two visitors (yeah, dozens of visitors)
         self.follow = False  # follow Use-Definition chains
         self.effective_nodes = set()
+        self.call_defs = {}
         self.effective_fun_def_nodes = {}
         self.scopes = [{}]
         self.fun_def_scopes = []
@@ -27,6 +28,8 @@ class EffectiveNodeSearch(BaseVisitor):
     def reset(self):
         self.follow = False
         self.effective_nodes = set()
+        self.call_defs = {}
+        self.effective_fun_def_nodes = {}
         self.scopes = [{}]
         self.fun_def_scopes = []
 
@@ -39,16 +42,13 @@ class EffectiveNodeSearch(BaseVisitor):
             self.scopes.pop()
 
     @contextmanager
-    def in_fun_def(self, name):
+    def in_fun_def(self, name, node):
         try:
-            self.scopes[-1][name] = {'is_effective': False, 'effective_nodes': set()}
+            self.scopes[-1][name] = {'node': node, 'is_effective': False, 'effective_nodes': set()}
             self.fun_def_scopes.append(name)
             yield
         finally:
             self.fun_def_scopes.pop()
-
-    def define_fun(self, name):
-        self.scopes[-1][name] = False
 
     def resolve_fun(self, name):
         for i in range(len(self.scopes)):
@@ -75,17 +75,18 @@ class EffectiveNodeSearch(BaseVisitor):
         with self.in_scope():
             for stmt in node.statements:
                 self.visit(stmt)
-                if stmt in self.effective_nodes:
+
+                if self.follow and stmt in self.effective_nodes:
                     self.effective_nodes.add(node)
 
     def visit_function_def(self, node):
-        with self.in_fun_def(node.name):
+        with self.in_fun_def(node.name, node):
             self.visit(node.body)
 
     def visit_print_stmt(self, node):
         self.visit(node.expr)
-
         if self.follow:
+            self.effective_nodes.add(node)
             return
 
         if self.fun_def_scopes:
@@ -227,6 +228,7 @@ class EffectiveNodeSearch(BaseVisitor):
     def visit_call(self, node):
         if self.follow:
             self.effective_nodes.add(node)
+            self.effective_nodes.add(self.call_defs[node])
 
             for a in node.args:
                 self.visit(a)
@@ -252,7 +254,7 @@ class EffectiveNodeSearch(BaseVisitor):
                 info['effective_nodes'].add(node)
             else:
                 self.effective_nodes.add(node)
-                # TODO: add function def node to effective
+                self.call_defs[node] = info['node']
 
     def visit_variable(self, node):
         if self.follow:
