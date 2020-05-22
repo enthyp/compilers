@@ -178,12 +178,13 @@ class GenKillBuilder(BaseVisitor):
     KILLs.
 
     TODO: use stack of scopes to approximate them better
-
     TODO: 'return' statement should only appear at the end of a block?
 
     Attributes:
         var_defs (dict): map (name -> set of Assignment/VariableDeclaration nodes) - all variable
             definitions in the whole program
+        scopes (list): stack of scopes, in each we store GEN and KILL sets that shall be assigned to
+            Call nodes for functions present in scope
         gen (dict): map (AST node -> set of Assignment/VariableDeclaration nodes) - all definitions of
             variables (assignments or declarations) WITHIN given node that reach the endpoint of this
             node
@@ -213,7 +214,7 @@ class GenKillBuilder(BaseVisitor):
             self.scopes.pop()
 
     def resolve(self, name):
-        for scope in enumerate(reversed(self.scopes)):
+        for scope in reversed(self.scopes):
             if name in scope:
                 return scope[name]
         raise Exception(f'Failed to resolve function {name}')

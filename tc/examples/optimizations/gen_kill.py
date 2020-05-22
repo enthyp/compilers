@@ -26,8 +26,16 @@ example2 = """
 """
 
 example3 = """
+    var a : int = 1;
     
+    def fun(p : int) {
+        a = 10;
+        return p
+    }
+
+    fun(10)
 """
+
 
 def run(example):
     parser = Parser()
@@ -40,4 +48,4 @@ def run(example):
     pprint(kill)
 
 
-run(example2)
+run(example3)
