@@ -175,6 +175,7 @@ class UseDefFollower(BaseVisitor):
 
     def visit_print_stmt(self, node):
         if node in self.effective_nodes or self.follows:
+            self.effective_nodes.add(node)
             with self.following():
                 self.visit(node.expr)
 
@@ -310,17 +311,10 @@ class RedundancyOptimizer(BaseVisitor):
         return cond_effective or body_effective
 
     def visit_while_stmt(self, node):
-        cond_effective = self.visit(node.condition)
-        body_effective = self.visit(node.body)
-        return cond_effective or body_effective
+        return True  # TODO
 
     def visit_for_stmt(self, node):
-        init_effective = self.visit(node.initializer)
-        cond_effective = self.visit(node.condition)
-        inc_effective = self.visit(node.increment)
-        body_effective = self.visit(node.body)
-
-        return init_effective or cond_effective or body_effective or inc_effective
+        return True
 
     def visit_binary_expr(self, node):
         return self.visit(node.left) or self.visit(node.right)
