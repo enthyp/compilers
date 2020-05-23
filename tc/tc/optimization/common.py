@@ -79,13 +79,13 @@ class GenKillBuilder(BaseVisitor):
 
     def __init__(self):
         self.var_defs = defaultdict(set)
-        self.scopes = [{}]
+        self.scopes = [{f: (set(), set()) for f in global_functions}]
         self.gen = {}
         self.kill = {}
 
     def reset(self):
         self.var_defs = defaultdict(set)
-        self.scopes = [{}]
+        self.scopes = [{f: (set(), set()) for f in global_functions}]
         self.gen = {}
         self.kill = {}
 

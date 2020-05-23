@@ -1,5 +1,5 @@
 from tc import Parser, PrettyPrinter
-from tc.optimization.redundancy import GenKillBuilder, InOutBuilder, EffectiveStatementSearch, RedundancyOptimizer
+from tc.optimization.redundancy import GenKillBuilder, InOutBuilder, RedundancyOptimizer
 
 
 example1 = """
@@ -107,6 +107,22 @@ example8 = """
     y = y 2 +
 """
 
+example9 = """
+    def fun(i: int) {
+        var x: int = 3;
+        
+        # Multiplies by 3
+        def fun(y: int) {
+            print 'Called inner fun with y = ' tostring(y) +;
+            return x y *
+        }
+
+        return fun(i);
+    }
+
+    print fun(2)
+"""
+
 
 def run(example, name):
     parser = Parser()
@@ -144,4 +160,5 @@ def run(example, name):
 # run(example5, 'redundancy_fib')
 # run(example6, 'redundancy_blocks')
 # run(example7, 'redundancy_fun')
-run(example8, 'redundancy_fun2')
+# run(example8, 'redundancy_fun2')
+run(example9, 'redundancy_nested_fun')

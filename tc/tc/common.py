@@ -17,7 +17,7 @@ class BaseVisitor:
         method = getattr(self, m_name, None)
 
         if not method:
-            self.visit_unknown(m_name)
+            return self.visit_unknown(m_name)
         else:
             return method(node, *args)
 

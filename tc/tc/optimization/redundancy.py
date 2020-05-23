@@ -1,21 +1,24 @@
 from contextlib import contextmanager
 from tc.common import BaseVisitor
 from tc.optimization.common import GenKillBuilder, InOutBuilder
+from tc.globals import global_env
+
+global_functions = global_env().functions.keys()
 
 
-class EffectiveStatementSearch(BaseVisitor):
+class FindEffectiveStatements(BaseVisitor):
     """Finds top-level statements necessary to trigger all side effects."""
 
     def __init__(self):
         self.eff_statements = set()
         self.call_fun_info = {}
-        self.scopes = [{}]
+        self.scopes = [{f: {'follow_nodes': set(), 'is_effective': False} for f in global_functions}]
         self.fun_def_scopes = []
 
     def reset(self):
         self.eff_statements = set()
         self.call_fun_info = {}
-        self.scopes = [{}]
+        self.scopes = [{f: {'follow_nodes': set(), 'is_effective': False} for f in global_functions}]
         self.fun_def_scopes = []
 
     @contextmanager
@@ -29,11 +32,12 @@ class EffectiveStatementSearch(BaseVisitor):
     @contextmanager
     def in_fun_def(self, node):
         try:
-            self.scopes[-1][node.name] = {
+            info = {
                 'follow_nodes': {node},
                 'is_effective': False,
             }
-            self.fun_def_scopes.append(node.name)
+            self.scopes[-1][node.name] = info
+            self.fun_def_scopes.append(info)
             yield
         finally:
             self.fun_def_scopes.pop()
@@ -67,8 +71,7 @@ class EffectiveStatementSearch(BaseVisitor):
         self.visit(node.expr)
 
         if self.fun_def_scopes:
-            cur_function = self.fun_def_scopes[-1]
-            info = self.get_fun_info(cur_function)
+            info = self.fun_def_scopes[-1]
             info['is_effective'] = True
             info['follow_nodes'].add(node)
         else:
@@ -106,8 +109,7 @@ class EffectiveStatementSearch(BaseVisitor):
     def visit_return_stmt(self, node):
         if self.fun_def_scopes:
             self.visit(node.expr)
-            cur_function = self.fun_def_scopes[-1]
-            info = self.get_fun_info(cur_function)
+            info = self.fun_def_scopes[-1]
             info['follow_nodes'].add(node)
         else:
             raise Exception('Return statement outside of function!')
@@ -123,10 +125,8 @@ class EffectiveStatementSearch(BaseVisitor):
 
         if effective_body or effective_args:
             if self.fun_def_scopes:
-                cur_function = self.fun_def_scopes[-1]
-                info = self.get_fun_info(cur_function)
+                info = self.fun_def_scopes[-1]
                 info['is_effective'] = True
-                info['follow_nodes'].add(node)
             else:
                 self.eff_statements.add(node)
 
@@ -134,8 +134,8 @@ class EffectiveStatementSearch(BaseVisitor):
         pass
 
 
-class UseDefFollower(BaseVisitor):
-    """Find variable assignments and declarations necessary for top-level effective statements."""
+class FollowUseDef(BaseVisitor):
+    """Find variable and function definitions necessary for top-level effective statements."""
     def __init__(self, in_sets, effective_nodes, call_fun_info):
         self.in_sets = in_sets
         self.effective_nodes = effective_nodes
@@ -247,6 +247,181 @@ class UseDefFollower(BaseVisitor):
         pass
 
 
+class ExtendEffective(BaseVisitor):
+    """Mark as effective by following AST structure from top-level effective statements.
+
+    This is purely syntax based, does not consider semantic issues like: variables from loop
+    condition may not be referenced by effective statements but still must be declared for
+    loop to work etc. For such cases we need additional processing (below).
+
+    """
+
+    def __init__(self, effective_nodes):
+        self.effective_nodes = effective_nodes
+
+    def run(self, statements):
+        self.visit_statements(statements)
+
+    def visit_statements(self, statements):
+        are_effective = False
+        for stmt in statements:
+            if self.visit(stmt):
+                self.effective_nodes.add(stmt)
+                are_effective = True
+        return are_effective
+
+    def visit_block(self, node):
+        if self.visit_statements(node.statements):
+            self.effective_nodes.add(node)
+            return True
+        return False
+
+    def visit_function_def(self, node):
+        if node in self.effective_nodes:
+            for p in node.parameters:
+                self.effective_nodes.add(p)
+            self.effective_nodes.add(node.body)
+            self.visit(node.body)
+            return True
+        return False
+
+    def visit_variable_declaration(self, node):
+        if node in self.effective_nodes:
+            if node.value:
+                self.effective_nodes.add(node.value)
+                self.visit(node.value)
+            return True
+        return False
+
+    def visit_assignment(self, node):
+        if node in self.effective_nodes:
+            self.effective_nodes.add(node.value)
+            self.visit(node.value)
+            return True
+        return False
+
+    def visit_print_stmt(self, node):
+        if node in self.effective_nodes:
+            self.effective_nodes.add(node.expr)
+            self.visit(node.expr)
+            return True
+        return False
+
+    def visit_if_stmt(self, node):
+        cond_effective = self.visit(node.condition)
+        body_effective = self.visit(node.body)
+        if cond_effective or body_effective:
+            self.effective_nodes.add(node)
+            return True
+        return False
+
+    def visit_while_stmt(self, node):
+        cond_effective = self.visit(node.condition)
+        body_effective = self.visit(node.body)
+        if cond_effective or body_effective:
+            self.effective_nodes.add(node)
+            return True
+        return False
+
+    def visit_for_stmt(self, node):
+        init_effective = self.visit(node.initializer)
+        cond_effective = self.visit(node.condition)
+        body_effective = self.visit(node.body)
+        inc_effective = self.visit(node.increment)
+        if init_effective or cond_effective or body_effective or inc_effective:
+            self.effective_nodes.add(node)
+            return True
+        return False
+
+    def visit_binary_expr(self, node):
+        l_effective = self.visit(node.left)
+        r_effective = self.visit(node.right)
+        if l_effective or r_effective:
+            self.effective_nodes.add(node)
+            return True
+        return False
+
+    def visit_unary_expr(self, node):
+        if self.visit(node.expr):
+            self.effective_nodes.add(node)
+            return True
+        return False
+
+    def visit_return_stmt(self, node):
+        if node in self.effective_nodes:
+            self.effective_nodes.add(node.expr)
+            self.visit(node.expr)
+            return True
+        return False
+
+    def visit_call(self, node):
+        if node in self.effective_nodes:
+            for a in node.args:
+                self.effective_nodes.add(a)
+                self.visit(a)
+            return True
+        return False
+
+    def visit_unknown(self, m_name):
+        return True
+
+
+class FollowConditions(BaseVisitor):
+    """For effective conditional blocks marks all definitions of condition variables as effective."""
+
+    def __init__(self, in_sets, effective_nodes):
+        self.in_sets = in_sets
+        self.effective_nodes = effective_nodes
+
+    def run(self, statements):
+        self.visit_statements(statements)
+
+    def visit_statements(self, statements):
+        for stmt in statements:
+            self.visit(stmt)
+
+    def visit_block(self, node):
+        self.visit_statements(node.statements)
+
+    def visit_function_def(self, node):
+        self.visit(node.body)
+
+    def visit_if_stmt(self, node):
+        if node in self.effective_nodes:
+            definitions = self.visit(node.condition)
+            for d in definitions:
+                self.effective_nodes.add(d)
+
+    def visit_while_stmt(self, node):
+        if node in self.effective_nodes:
+            definitions = self.visit(node.condition)
+            for d in definitions:
+                self.effective_nodes.add(d)
+
+    def visit_for_stmt(self, node):
+        if node in self.effective_nodes:
+            definitions = self.visit(node.condition)
+            for d in definitions:
+                self.effective_nodes.add(d)
+
+    def visit_binary_expr(self, node):
+        return self.visit(node.left) | self.visit(node.right)
+
+    def visit_unary_expr(self, node):
+        return self.visit(node.expr)
+
+    def visit_call(self, node):
+        arg_defs = [self.visit(a) for a in node.args]
+        return set().union(*arg_defs)
+
+    def visit_variable(self, node):
+        defs = self.in_sets[node]
+        return {d for d in defs if d.name == node.name}
+
+    def visit_unknown(self, m_name):
+        return set()
+
+
 class RedundancyOptimizer(BaseVisitor):
     """Removes all subtrees of input AST that do not contain effective nodes."""
 
@@ -262,9 +437,11 @@ class RedundancyOptimizer(BaseVisitor):
         in_sets, out_sets = InOutBuilder(gen, kill).run(statements)
 
         # Find all effective nodes of the AST
-        effective_top_level, call_fun_info = EffectiveStatementSearch().run(statements)
-        follower = UseDefFollower(in_sets, effective_top_level, call_fun_info)
-        self.effective_nodes = follower.run(statements)
+        effective_top_level, call_fun_info = FindEffectiveStatements().run(statements)
+        self.effective_nodes = FollowUseDef(in_sets, effective_top_level, call_fun_info).run(statements)
+
+        ExtendEffective(self.effective_nodes).run(statements)
+        FollowConditions(in_sets, self.effective_nodes).run(statements)
 
         # Prune redundant nodes
         return self.visit_statements(statements)
@@ -272,61 +449,28 @@ class RedundancyOptimizer(BaseVisitor):
     def visit_statements(self, statements):
         new_statements = []
         for stmt in statements:
-            if self.visit(stmt):
+            if stmt in self.effective_nodes:
                 new_statements.append(stmt)
+                self.visit(stmt)
 
         return new_statements
 
     def visit_block(self, node):
-        statements = self.visit_statements(node.statements)
-        if statements:
-            node.statements = statements
-            return True
-        else:
-            return False
+        node.statements = self.visit_statements(node.statements)
 
     def visit_function_def(self, node):
-        return self.visit(node.body)
-
-    def visit_variable_declaration(self, node):
-        if node in self.effective_nodes:
-            return True
-        elif node.value:
-            return self.visit(node.value)
-        else:
-            return False
-
-    def visit_assignment(self, node):
-        if node in self.effective_nodes:
-            return True
-        else:
-            return self.visit(node.value)
-
-    def visit_print_stmt(self, node):
-        return node in self.effective_nodes
+        self.visit(node.body)
 
     def visit_if_stmt(self, node):
-        cond_effective = self.visit(node.condition)
-        body_effective = self.visit(node.body)
-        return cond_effective or body_effective
+        self.visit(node.body)
 
     def visit_while_stmt(self, node):
-        return True  # TODO
+        self.visit(node.body)
 
     def visit_for_stmt(self, node):
-        return True
-
-    def visit_binary_expr(self, node):
-        return self.visit(node.left) or self.visit(node.right)
-
-    def visit_unary_expr(self, node):
-        return self.visit(node.expr)
-
-    def visit_return_stmt(self, node):
-        return node in self.effective_nodes
-
-    def visit_call(self, node):
-        return node in self.effective_nodes or any(a in self.effective_nodes for a in node.args)
+        self.visit(node.initializer)
+        self.visit(node.body)
+        self.visit(node.increment)
 
     def visit_unknown(self, m_name):
-        return True
+        pass
