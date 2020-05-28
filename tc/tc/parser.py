@@ -198,6 +198,7 @@ class Parser:
     @staticmethod
     def t_BOOL(t):
         r"""true|false"""
+        t.value = (t.value == 'true')
         return t
 
     @staticmethod

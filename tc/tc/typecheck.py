@@ -95,27 +95,34 @@ class TypeCheck(BaseVisitor):
     def visit_variable_declaration(self, node):
         if node.value:
             r_type = self.visit(node.value)
-            assert node.type == r_type
+            if node.type != r_type:
+                raise TypeError(f'Incorrect value for variable {node.name} of type: {node.type}')
         self.env.declare_var(node.name, node.type)
 
     def visit_assignment(self, node):
         l_type = self.env.resolve_var(node.name, level=node.scope_depth)
         r_type = self.visit(node.value)
-        assert l_type == r_type
+        if l_type != r_type:
+            raise TypeError(f'Incorrect value for variable {node.name} of type: {l_type}')
 
     def visit_if_stmt(self, node):
-        assert self.visit(node.condition) == Type.BOOL
+        if self.visit(node.condition) != Type.BOOL:
+            raise TypeError(f'Non-boolean condition in "if" statement.')
         self.visit(node.body)
 
     def visit_while_stmt(self, node):
-        assert self.visit(node.condition) == Type.BOOL
+        if self.visit(node.condition) != Type.BOOL:
+            raise TypeError(f'Non-boolean condition in "while" statement.')
+
         self.visit(node.body)
 
     def visit_for_stmt(self, node):
         self.env = Environment(enclosing=self.env)
 
         self.visit(node.initializer)
-        assert self.visit(node.condition) == Type.BOOL
+        if self.visit(node.condition) != Type.BOOL:
+            raise TypeError(f'Non-boolean condition in "for" statement.')
+
         self.visit(node.body)
 
         self.env = self.env.enclosing
@@ -168,7 +175,7 @@ class TypeCheck(BaseVisitor):
             assert op in binary_signatures[(l_type, r_type)]
             return binary_signatures[(l_type, r_type)][op]
         except AssertionError:
-            raise Exception(f'Incorrect types for operator: {l_type} {r_type} {op}')
+            raise TypeError(f'Incorrect types for operator: {l_type} {r_type} {op}')
 
     @staticmethod
     def check_unary(e_type, op):
@@ -177,5 +184,5 @@ class TypeCheck(BaseVisitor):
             assert op in unary_signatures[e_type]
             return unary_signatures[e_type][op]
         except AssertionError:
-            raise Exception(f'Incorrect type for operator: {e_type} {op}')
+            raise TypeError(f'Incorrect type for operator: {e_type} {op}')
 

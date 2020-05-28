@@ -65,7 +65,10 @@ class Evaluator(BaseVisitor):
         try:
             self.env.resolve_var(node.name, level=0)
         except:
-            value = self.visit(node.value)
+            if node.value:
+                value = self.visit(node.value)
+            else:
+                value = None
             self.env.declare_var(node.name, value)
         else:
             raise Exception(f'Variable {node.name} declared twice!')
