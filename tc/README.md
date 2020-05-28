@@ -1,6 +1,7 @@
 # TC
-The throwaway calculator, kind of like `dc` Reverse Polish Notation calculator but less vintage.
+The Throwaway Calculator is an interpreter for a simple language that resembles gnome-calculator 
 
 ### HOWTO
-Just `pip install .` in your env and e.g. run `python test.py` in `examples` directory. This requires Graphviz installed. `repl.py` requires `tc` only.
+`make install` to install into local env
 
+`make test` to run test for all cases required during the labs
