@@ -72,6 +72,9 @@ class Literal:
     value: typing.Union[str, int, float, bool]
     type: typing.Any = None
 
+    def __hash__(self):
+        return id(self)
+
     def __repr__(self):
         return f'Literal(value={self.value}, type={self.type})'
 
@@ -98,10 +101,13 @@ class UnaryExpr:
         self.expr = expr
 
 
-@dataclass(unsafe_hash=True)
+@dataclass
 class Variable:
     name: str
     scope_depth: int = None
+
+    def __hash__(self):
+        return id(self)
 
     def __repr__(self):
         return f'Variable(name={self.name})'
