@@ -1,3 +1,4 @@
+import logging
 import ply.lex as lex
 import ply.yacc as yacc
 import typing
@@ -6,7 +7,7 @@ from tc.common import Type
 
 
 # All possible nodes of the abstract syntax tree.
-@dataclass
+@dataclass(unsafe_hash=True)
 class AssertStmt:
     expr: typing.Any
 
@@ -161,7 +162,7 @@ class Parser:
     }
     tokens += list(reserved.values())
 
-    literals = ['=', '+', '-', '*', '/', '(', ')', ':', ',', ';', '{', '}']
+    literals = ['=', '+', '-', '*', '/', '(', ')', '[', ']', ':', ',', ';', '{', '}']
 
     t_EQ = r'=='
     t_NEQ = r'!='
@@ -223,7 +224,7 @@ class Parser:
         ('nonassoc', 'EQ', 'NEQ', 'LEQ', 'LE', 'GEQ', 'GE'),
         ('left', '+', '-'),
         ('left', '*', '/'),
-        ('RIGHT', 'POW'),
+        ('right', 'POW'),
         ('right', 'UMINUS')
     )
 
@@ -269,9 +270,9 @@ class Parser:
 
     @staticmethod
     def p_statements_err(p):
-        """statements : error"""
-        print('Error!')
-        raise Exception
+        """statements : statements error statement """
+        logging.error('Skipped syntactically incorrect statement.')
+        p[0] = p[1] + [p[3]]
 
     @staticmethod
     def p_stmt_empty(p):
@@ -421,6 +422,13 @@ class Parser:
             p[0] = [p[1]]
 
     @staticmethod
+    def p_expr_par(p):
+        """expr : '(' expr ')'
+                | '[' onp_expr ']'
+        """
+        p[0] = p[2]
+
+    @staticmethod
     def p_expr_binary(p):
         """expr : expr '+' expr
                 | expr '-' expr
@@ -437,9 +445,20 @@ class Parser:
         p[0] = BinaryExpr(left=p[1], right=p[3], op=p[2])
 
     @staticmethod
-    def p_expr_par(p):
-        """expr : '(' expr ')'"""
-        p[0] = p[2]
+    def p_onp_expr_binary(p):
+        """onp_expr : onp_expr onp_expr '+'
+                    | onp_expr onp_expr '-'
+                    | onp_expr onp_expr '*'
+                    | onp_expr onp_expr '/'
+                    | onp_expr onp_expr POW
+                    | onp_expr onp_expr EQ
+                    | onp_expr onp_expr NEQ
+                    | onp_expr onp_expr LE
+                    | onp_expr onp_expr LEQ
+                    | onp_expr onp_expr GE
+                    | onp_expr onp_expr GEQ
+        """
+        p[0] = BinaryExpr(left=p[1], right=p[2], op=p[3])
 
     @staticmethod
     def p_expr_uminus(p):
@@ -457,6 +476,11 @@ class Parser:
         p[0] = p[1]
 
     @staticmethod
+    def p_onp_expr_var(p):
+        """onp_expr : variable"""
+        p[0] = p[1]
+
+    @staticmethod
     def p_expr_var_value(p):
         """variable : IDENT"""
         p[0] = Variable(name=p[1])
@@ -464,6 +488,11 @@ class Parser:
     @staticmethod
     def p_expr_primitive(p):
         """expr : primitive"""
+        p[0] = p[1]
+
+    @staticmethod
+    def p_onp_expr_primitive(p):
+        """onp_expr : primitive"""
         p[0] = p[1]
 
     @staticmethod

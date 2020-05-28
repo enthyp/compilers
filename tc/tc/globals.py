@@ -1,3 +1,4 @@
+import math
 from tc.common import Callable, CallableSignature, Environment, PolyCallableSignature, Type
 
 
@@ -5,6 +6,8 @@ def global_env():
     env = Environment(None)
 
     # Define some builtin functions
+    env.define_fun('sin', Sin)
+    env.define_fun('cos', Cos)
     env.define_fun('toint', ToInt())
     env.define_fun('tofloat', ToFloat())
     env.define_fun('tostring', ToString())
@@ -13,6 +16,27 @@ def global_env():
    
 # Builtin functions 
 # TODO: boolean conversions?
+class MathFunction(Callable):
+    def __init__(self, fun):
+        self.fun = fun
+        self.signature = PolyCallableSignature([
+            CallableSignature([Type.INT], Type.FLOAT),
+            CallableSignature([Type.FLOAT], Type.FLOAT),
+        ])
+
+    def call(self, evaluator, args):
+        assert len(args) == 1
+        evaluator.env = Environment(enclosing=evaluator.env)
+        try:
+            return self.fun(evaluator.visit(args[0]))
+        finally:
+            evaluator.env = evaluator.env.enclosing
+
+
+Sin = MathFunction(math.sin)
+Cos = MathFunction(math.cos)
+
+
 class ToInt(Callable):
     def __init__(self):
         self.signature = PolyCallableSignature([

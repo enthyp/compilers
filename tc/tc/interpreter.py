@@ -161,12 +161,13 @@ class Interpreter:
         self.typecheck.reset()
         self.resolver.reset()
 
-    def run(self, program):
+    def run(self, program, opt=False):
         ast = self.parser.run(program)
         self.resolver.run(ast)
         self.typecheck.run(ast)
-        ast = self.redundancy_optimizer.run(ast)
-        self.dag_optimizer.run(ast)
-        ast = self.algebraic_optimizer.run(ast)
+        if opt:
+            ast = self.redundancy_optimizer.run(ast)
+            self.dag_optimizer.run(ast)
+            ast = self.algebraic_optimizer.run(ast)
         self.eval.run(ast)
         self.reset()
