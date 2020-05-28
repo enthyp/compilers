@@ -7,6 +7,7 @@ binary_signatures = {
         '+': Type.INT, 
         '-': Type.INT, 
         '*': Type.INT,
+        '%': Type.INT,
         '^': Type.INT,
         '==': Type.BOOL, 
         '!=': Type.BOOL, 
@@ -151,10 +152,7 @@ class TypeCheck(BaseVisitor):
 
     def visit_call(self, node):
         signature = self.env.resolve_fun(node.name, level=node.scope_depth).signature
-
-        self.env = Environment(enclosing=self.env)
         arg_types = [self.visit(a) for a in node.args]
-        self.env = self.env.enclosing
 
         return signature.verify(arg_types)
 

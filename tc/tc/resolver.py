@@ -97,10 +97,8 @@ class Resolver(BaseVisitor):
         depth = self.resolve(node.name, 'function')
         node.scope_depth = depth  # place scope info in the tree
 
-        self.push_scope()
         for a in node.args:
             self.visit(a)
-        self.pop_scope()
 
     def visit_variable(self, node):
         depth = self.resolve(node.name, 'variable')

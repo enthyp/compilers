@@ -168,7 +168,7 @@ class Parser:
     }
     tokens += list(reserved.values())
 
-    literals = ['=', '+', '-', '*', '/', '(', ')', '[', ']', ':', ',', ';', '{', '}']
+    literals = ['=', '+', '-', '*', '/', '%', '(', ')', '[', ']', ':', ',', ';', '{', '}']
 
     t_EQ = r'=='
     t_NEQ = r'!='
@@ -214,7 +214,7 @@ class Parser:
 
     @staticmethod
     def t_COMMENT(t):
-        r'\#.*\n'
+        r"""\#.*\n"""
 
     t_ignore = ' \t\n'
 
@@ -230,7 +230,7 @@ class Parser:
     precedence = (
         ('nonassoc', 'EQ', 'NEQ', 'LEQ', 'LE', 'GEQ', 'GE'),
         ('left', '+', '-'),
-        ('left', '*', '/'),
+        ('left', '*', '/', '%'),
         ('right', 'POW'),
         ('right', 'UMINUS')
     )
@@ -441,6 +441,7 @@ class Parser:
                 | expr '-' expr
                 | expr '*' expr
                 | expr '/' expr
+                | expr '%' expr
                 | expr POW expr
                 | expr EQ expr
                 | expr NEQ expr
@@ -457,6 +458,7 @@ class Parser:
                     | onp_expr onp_expr '-'
                     | onp_expr onp_expr '*'
                     | onp_expr onp_expr '/'
+                    | onp_expr onp_expr '%'
                     | onp_expr onp_expr POW
                     | onp_expr onp_expr EQ
                     | onp_expr onp_expr NEQ

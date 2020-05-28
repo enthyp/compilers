@@ -21,6 +21,7 @@ class Evaluator(BaseVisitor):
         '*': operator.mul,
         '/': operator.truediv,
         '^': operator.pow,
+        '%': operator.mod,
         '==': operator.eq,
         '!=': operator.ne,
         '>': operator.gt,

@@ -72,13 +72,12 @@ class Function(Callable):
         self.closure = closure
 
     def call(self, evaluator, args):
+        arguments = [evaluator.visit(a) for a in args]
         prev_env = evaluator.env
         evaluator.env = Environment(enclosing=self.closure)
-        arguments = [evaluator.visit(a) for a in args]
 
         for p, a in zip(self.params, arguments):
             evaluator.env.declare_var(p.name, a)
-
         try:
             evaluator.visit(self.body)
         except evaluator.ReturnValue as r:
