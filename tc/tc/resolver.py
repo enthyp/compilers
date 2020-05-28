@@ -87,6 +87,9 @@ class Resolver(BaseVisitor):
     def visit_unary_expr(self, node):
         self.visit(node.expr)
 
+    def visit_assert_stmt(self, node):
+        self.visit(node.expr)
+
     def visit_return_stmt(self, node):
         self.visit(node.expr)
 

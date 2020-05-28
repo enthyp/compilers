@@ -6,17 +6,27 @@ from tc.common import Type
 
 
 # All possible nodes of the abstract syntax tree.
-@dataclass(eq=False)
+@dataclass
+class AssertStmt:
+    expr: typing.Any
+
+
+@dataclass(unsafe_hash=True)
 class Assignment:
     name: str
     value: typing.Any
 
 
+@dataclass(unsafe_hash=True)
 class BinaryExpr:
-    def __init__(self, left, operator, right):
-        self.left = left
-        self.op = operator
-        self.right = right
+    left: typing.Any
+    op: str
+    right: typing.Any
+
+    def __eq__(self, other):
+        if isinstance(other, BinaryExpr):
+            return self.left == other.left and self.op == other.op and self.right == other.right
+        return False
 
 
 class Block:
@@ -24,11 +34,14 @@ class Block:
         self.statements = statements
 
 
+@dataclass
 class Call:
-    def __init__(self, name, arguments):
-        self.name = name
-        self.args = arguments
-        self.scope_depth = None
+    name: str
+    args: typing.List
+    scope_depth: int = None
+
+    def __hash__(self):
+        return hash((hash(self.name), hash(self.scope_depth)))
 
 
 class ForStmt:
@@ -53,13 +66,13 @@ class IfStmt:
         self.body = body
 
 
-@dataclass(eq=False)
+@dataclass(frozen=True)
 class Literal:
     value: typing.Union[str, int, float, bool]
-    type: typing.Any
+    type: typing.Any = None
 
     def __repr__(self):
-        return f'Literal(value={self.value})'
+        return f'Literal(value={self.value}, type={self.type})'
 
 
 class Parameter:
@@ -84,7 +97,7 @@ class UnaryExpr:
         self.expr = expr
 
 
-@dataclass(eq=False)
+@dataclass(unsafe_hash=True)
 class Variable:
     name: str
     scope_depth: int = None
@@ -93,11 +106,14 @@ class Variable:
         return f'Variable(name={self.name})'
 
 
-@dataclass(eq=False)
+@dataclass
 class VariableDeclaration:
     name: str
     type: typing.Any
     value: typing.Any
+
+    def __hash__(self):
+        return hash(self.name)
 
     def __repr__(self):
         return f'VariableDeclaration(name={self.name}, value={self.value})'
@@ -129,7 +145,7 @@ class Parser:
 
     tokens = [
         'INT', 'FLOAT', 'BOOL', 'STRING',
-        'EQ', 'NEQ', 'LE', 'LEQ', 'GE', 'GEQ', 'ITOF',
+        'POW', 'EQ', 'NEQ', 'LE', 'LEQ', 'GE', 'GEQ',
         'IDENT',
     ]
 
@@ -141,10 +157,11 @@ class Parser:
         'print': 'PRINT',
         'return': 'RETURN',
         'def': 'FUNCTION',
+        'assert': 'ASSERT'
     }
     tokens += list(reserved.values())
 
-    literals = ['=', '+', '-', '*', '/', '^', '(', ')', ':', ',', ';', '{', '}']
+    literals = ['=', '+', '-', '*', '/', '(', ')', ':', ',', ';', '{', '}']
 
     t_EQ = r'=='
     t_NEQ = r'!='
@@ -152,6 +169,12 @@ class Parser:
     t_LEQ = r'<='
     t_GE = r'>'
     t_GEQ = r'>='
+
+    @staticmethod
+    def t_POW(t):
+        r"""\*\*"""
+        t.value = '^'
+        return t
 
     @staticmethod
     def t_FLOAT(t):
@@ -195,6 +218,14 @@ class Parser:
     ###
     # PARSING
     ###
+
+    precedence = (
+        ('nonassoc', 'EQ', 'NEQ', 'LEQ', 'LE', 'GEQ', 'GE'),
+        ('left', '+', '-'),
+        ('left', '*', '/'),
+        ('RIGHT', 'POW'),
+        ('right', 'UMINUS')
+    )
 
     # A program is a list of statements.
     @staticmethod
@@ -344,6 +375,11 @@ class Parser:
         """statement : RETURN expr"""
         p[0] = ReturnStmt(expr=p[2])
 
+    @staticmethod
+    def p_assert_stmt(p):
+        """statement : ASSERT expr"""
+        p[0] = AssertStmt(expr=p[2])
+
     # Expressions
     @staticmethod
     def p_expression_statement(p):
@@ -353,12 +389,25 @@ class Parser:
     @staticmethod
     def p_expr_function_call_noarg(p):
         """expr : IDENT '(' ')'"""
-        p[0] = Call(name=p[1], arguments=[])
+        p[0] = Call(name=p[1], args=[])
 
     @staticmethod
     def p_expr_function_call(p):
         """expr : IDENT '(' arguments ')'"""
-        p[0] = Call(name=p[1], arguments=p[3])
+        p[0] = Call(name=p[1], args=p[3])
+
+    @staticmethod
+    def p_expr_function_call_no_par(p):
+        """expr : call_no_par """
+        p[0] = p[1]
+
+    @staticmethod
+    def p_call_no_par(p):
+        """call_no_par : IDENT call_no_par
+                       | IDENT variable
+                       | IDENT primitive
+        """
+        p[0] = Call(name=p[1], args=[p[2]])
 
     @staticmethod
     def p_arguments(p):
@@ -373,50 +422,66 @@ class Parser:
 
     @staticmethod
     def p_expr_binary(p):
-        """expr : expr expr '+'
-                | expr expr '-'
-                | expr expr '*'
-                | expr expr '/'
-                | expr expr '^'
-                | expr expr EQ
-                | expr expr NEQ
-                | expr expr LE
-                | expr expr LEQ
-                | expr expr GE
-                | expr expr GEQ
+        """expr : expr '+' expr
+                | expr '-' expr
+                | expr '*' expr
+                | expr '/' expr
+                | expr POW expr
+                | expr EQ expr
+                | expr NEQ expr
+                | expr LE expr
+                | expr LEQ expr
+                | expr GE expr
+                | expr GEQ expr
         """
-        if len(p) == 2:
-            p[0] = p[1]
-        else:
-            p[0] = BinaryExpr(left=p[1], right=p[2], operator=p[3])
+        p[0] = BinaryExpr(left=p[1], right=p[3], op=p[2])
+
+    @staticmethod
+    def p_expr_par(p):
+        """expr : '(' expr ')'"""
+        p[0] = p[2]
 
     @staticmethod
     def p_expr_uminus(p):
-        """expr : expr '-'"""
-        p[0] = UnaryExpr(operator='-', expr=p[1])
+        """expr : '-' expr %prec UMINUS"""
+        p[0] = UnaryExpr(operator='-', expr=p[2])
+
+    @staticmethod
+    def p_expr_mult_implicit(p):
+        """expr : expr expr """
+        p[0] = BinaryExpr(op='*', left=p[1], right=p[2])
+
+    @staticmethod
+    def p_expr_var(p):
+        """expr : variable"""
+        p[0] = p[1]
 
     @staticmethod
     def p_expr_var_value(p):
-        """expr : IDENT"""
+        """variable : IDENT"""
         p[0] = Variable(name=p[1])
 
     @staticmethod
+    def p_expr_primitive(p):
+        """expr : primitive"""
+        p[0] = p[1]
+
+    @staticmethod
     def p_expr_bool(p):
-        """expr : BOOL"""
+        """primitive : BOOL"""
         p[0] = Literal(value=p[1], type=Type.BOOL)
 
     @staticmethod
     def p_expr_int(p):
-        """expr : INT"""
+        """primitive : INT"""
         p[0] = Literal(value=p[1], type=Type.INT)
 
     @staticmethod
     def p_expr_float(p):
-        """expr : FLOAT"""
+        """primitive : FLOAT"""
         p[0] = Literal(value=p[1], type=Type.FLOAT)
 
     @staticmethod
     def p_expr_string(p):
-        """expr : STRING"""
+        """primitive : STRING"""
         p[0] = Literal(value=p[1], type=Type.STRING)
-

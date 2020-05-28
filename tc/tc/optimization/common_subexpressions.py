@@ -111,6 +111,9 @@ class ExpressionDAGOptimizer(BaseVisitor):
             self.subexpr[cur_key] = node
         return cur_key
 
+    def visit_assert_stmt(self, node):
+        self.visit(node.expr, node, 'expr')
+
     def visit_return_stmt(self, node):
         self.visit(node.expr, node, 'expr')
 

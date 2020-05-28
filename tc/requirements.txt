@@ -1,0 +1,4 @@
+-e .
+ply
+graphviz
+pytest

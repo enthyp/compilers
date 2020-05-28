@@ -106,6 +106,9 @@ class FindEffectiveStatements(BaseVisitor):
     def visit_unary_expr(self, node):
         self.visit(node.expr)
 
+    def visit_assert_stmt(self, node):
+        self.visit(node.expr)
+
     def visit_return_stmt(self, node):
         if self.fun_def_scopes:
             self.visit(node.expr)
@@ -211,6 +214,11 @@ class FollowUseDef(BaseVisitor):
         self.visit(node.right)
 
     def visit_unary_expr(self, node):
+        self.visit(node.expr)
+
+    def visit_assert_stmt(self, node):
+        if self.follows:
+            self.effective_nodes.add(node)
         self.visit(node.expr)
 
     def visit_return_stmt(self, node):
@@ -344,6 +352,13 @@ class ExtendEffective(BaseVisitor):
     def visit_unary_expr(self, node):
         if self.visit(node.expr):
             self.effective_nodes.add(node)
+            return True
+        return False
+
+    def visit_assert_stmt(self, node):
+        if node in self.effective_nodes:
+            self.effective_nodes.add(node.expr)
+            self.visit(node.expr)
             return True
         return False
 

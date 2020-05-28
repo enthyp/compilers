@@ -79,6 +79,10 @@ class AlgebraicOptimizer(BaseVisitor):
 
         return node
 
+    def visit_assert_stmt(self, node):
+        node.expr = self.visit(node.expr)
+        return node
+
     def visit_return_stmt(self, node):
         node.expr = self.visit(node.expr)
         return node

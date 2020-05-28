@@ -119,6 +119,10 @@ class Evaluator(BaseVisitor):
             node.cache = value
         return value
 
+    def visit_assert_stmt(self, node):
+        value = self.visit(node.expr)
+        assert value
+
     class ReturnValue(Exception):
         def __init__(self, val):
             super()

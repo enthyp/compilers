@@ -6,37 +6,37 @@ interpreter = Interpreter()
 
 example_if = """
 var a : int = 3;
-if (a 4 <) {
-    print a 7 -
+if (a < 4) {
+    print (a - 7)
 }
 """
 example_while = """
     var i : int = 1;
-    while (i 10 <) {
-        var tmp : int = i -1 *;
-        i = i 2 +;
+    while (i < 10) {
+        var tmp : int = i * -1;
+        i = i + 2;
         print tmp
     }
 """
 example_for = """
-    for (var x : int = 2; x 0 >; x = x 1 -) {
+    for (var x : int = 2; x > 0; x = x - 1) {
         print x
     }
 """
 example_overloading = """
     var x : string = 'a';
-    print x 'lamakota' +;
+    print x + 'lamakota';
     var y : int = 0;
-    print y 12 +
+    print y + 12
 """
 example_int_to_float = """
-    var x : int = 1 -;
+    var x : int = -1;
     var y : float = tofloat(x);
     print y 
 """
 example_function = """
     def sayHello(name : string) {
-        print 'Hello, ' name +
+        print 'Hello, ' + name
     }
     
     sayHello('good man.')
@@ -47,8 +47,8 @@ example_nested_call = """
     }
     def relieve(name : string) {
         var Answer : string = tostring(TheAnswer());
-        print 'Hello, ' name +;
-        print 'The answer you need so desperately is ' Answer +
+        print 'Hello, ' + name;
+        print 'The answer you need so desperately is ' + Answer
     }
 
     relieve('good man.')
@@ -60,12 +60,12 @@ example_fib = """
         var a : int = 1;
         var b : int = 1;
         var i : int = 1;
-        while (i n <) {
+        while (i < n) {
             print b;
             var tmp : int = a;
             a = b;
-            b = tmp b +;
-            i = i 1 +
+            b = tmp + b;
+            i = i + 1
         }
         return b
     }
@@ -96,7 +96,7 @@ bad_types = """
 """
 bad_op_types = """
     var x : string = 'a';
-    x 1 +
+    x + 1
 """
 bad_fun_types = """
     def fun(s : string) : int {
@@ -105,13 +105,13 @@ bad_fun_types = """
     fun(1)
 """
 bad_condition = """
-    if (1 1 +) {
+    if (1 + 1) {
         print 2
     }
 """
 bad_lvalue = """
     var x : string = '';
-    '' = x 'b' +
+    '' = x + 'b'
 """
 
 bad_examples = [

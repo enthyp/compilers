@@ -129,6 +129,10 @@ class TypeCheck(BaseVisitor):
         e_type = self.visit(node.expr)
         return self.check_unary(e_type, node.op)
 
+    def visit_assert_stmt(self, node):
+        type = self.visit(node.expr)
+        assert type == Type.BOOL
+
     class ReturnType(Exception):
         def __init__(self, type):
             super()

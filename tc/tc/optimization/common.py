@@ -210,6 +210,9 @@ class GenKillBuilder(BaseVisitor):
     def visit_unary_expr(self, node):
         self.carry(node, node.expr)
 
+    def visit_assert_stmt(self, node):
+        self.carry(node, node.expr)
+
     def visit_return_stmt(self, node):
         self.carry(node, node.expr)
 
@@ -334,6 +337,11 @@ class InOutBuilder(BaseVisitor):
         self.out_sets[node] = self.visit_statements(stmt_list, self.in_sets[node])
 
     def visit_unary_expr(self, node):
+        self.in_sets[node.expr] = self.in_sets[node]
+        self.visit(node.expr)
+        self.transfer(node)
+
+    def visit_assert_stmt(self, node):
         self.in_sets[node.expr] = self.in_sets[node]
         self.visit(node.expr)
         self.transfer(node)
