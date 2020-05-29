@@ -37,7 +37,7 @@ def repl():
 
 def interpret(input_str):
     interpreter = Interpreter()
-    interpreter.run(input_str, opt=True)
+    interpreter.run(input_str, opt=False)
 
 
 def main():

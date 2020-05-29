@@ -7,6 +7,7 @@ binary_signatures = {
         '+': Type.INT, 
         '-': Type.INT, 
         '*': Type.INT,
+        '/': Type.FLOAT,
         '%': Type.INT,
         '^': Type.INT,
         '==': Type.BOOL, 

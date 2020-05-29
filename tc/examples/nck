@@ -1,0 +1,14 @@
+# Newton symbol
+def nck(n : int, k : int) : int {
+    def factorial(k : int) : int {
+        if (k == 0) {
+            return 1;
+        }
+        return k * factorial(k - 1)
+    }
+    
+    var result : float = factorial(n) * factorial(k) / factorial(n - k);
+    return toint(result)
+}
+
+print '10 choose 4 = ' + tostring(nck(10, 4))
