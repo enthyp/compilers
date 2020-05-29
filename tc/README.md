@@ -81,4 +81,4 @@ def test_call():
   
 ### Problems
 * error handling sucks
-* optimizations based on reaching definitions work most of the time but some corner cases have gone unhandled probably
+* optimizations based on reaching definitions work for tested cases but I have possibly skipped some corners
