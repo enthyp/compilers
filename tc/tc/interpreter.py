@@ -171,7 +171,7 @@ class Interpreter:
         self.typecheck.run(ast)
         if opt:
             ast = self.redundancy_optimizer.run(ast)
-            self.dag_optimizer.run(ast)
+            ast = self.dag_optimizer.run(ast)
             ast = self.algebraic_optimizer.run(ast)
         self.eval.run(ast)
         self.reset()

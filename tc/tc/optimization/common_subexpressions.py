@@ -47,6 +47,7 @@ class ExpressionDAGOptimizer(BaseVisitor):
     def run(self, statements):
         for stmt in statements:
             self.visit(stmt)
+        return statements
 
     def visit_block(self, node):
         self.push_scope()
