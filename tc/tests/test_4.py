@@ -1,4 +1,5 @@
 import logging
+import pytest
 from tc.interpreter import Interpreter
 
 logging.basicConfig(level=logging.INFO)
@@ -61,24 +62,44 @@ def test_global_local_var():
     interpreter.run(global_local_var_program)
 
 
-function_call_program = """
-    def gcd(a: int, b: int): int {
-        if (a < b) {
-            var tmp: int = a;
-            a = b;
-            b = tmp;
+function_call_programs = [
+    """
+        def gcd(a: int, b: int): int {
+            if (a < b) {
+                var tmp: int = a;
+                a = b;
+                b = tmp;
+            }
+            if (b == 0) {
+                return a;
+            }
+    
+            return gcd(b, a % b)
         }
-        if (b == 0) {
-            return a;
+    
+        assert gcd(14, 21) == 7
+    """,
+    """
+        var name: string = 'User';
+    
+        def fun(name: string) {
+            print 'Hello from global scope, ' + name
         }
+    
+        {
+            def fun(name: string) {
+                print 'Hello from inner scope, ' + name
+            }
+    
+            print fun(name);  # inner
+        }
+    
+        print fun(name)       # global
+    """
+]
 
-        return gcd(b, a % b)
-    }
 
-    assert gcd(14, 21) == 7
-"""
-
-
-def test_call():
+@pytest.mark.parametrize('test_input', function_call_programs)
+def test_call(test_input):
     interpreter = Interpreter()
-    interpreter.run(function_call_program)
+    interpreter.run(test_input)

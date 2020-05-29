@@ -5,7 +5,7 @@ The Throwaway Calculator is an interpreter for a simple language that resembles 
 ```python
 from tc import Interpreter
 
-function_call_program = """
+euclid = """
     def gcd(a: int, b: int): int {
         if (a < b) {
             var tmp: int = a;
@@ -20,15 +20,35 @@ function_call_program = """
     assert gcd(14, 21) == 7
 """
 
+fibonacci = """
+    var n : int = 10;
+    
+    def fib(n : int) : int {
+        var a : int = 1;
+        var b : int = 1;
+        var i : int = 1;
+        while (i < n) {
+            print b;
+            var tmp : int = a;
+            a = b;
+            b = tmp + b;
+            i = i + 1
+        }
+        return b
+    }
+    
+    assert fib(n) == 89
+"""
 
 def test_call():
     interpreter = Interpreter()
-    interpreter.run(function_call_program)
+    interpreter.run(euclid)
+    interpreter.run(fibonacci)
 ```
 
-Can also run a REPL with `python examples/repl.py`
+Once `tc` is installed one can enter REPL with `tc-repl` command
 
 ### HOWTO
 `make install` to install into local env
 
-`make test` to run test for all cases required during the labs
+`make test` to run all required test cases

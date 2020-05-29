@@ -200,4 +200,4 @@ def test_algebraic_optimizations(test_input, name):
     ast = optimizer.run(ast)
 
     pp = PrettyPrinter()
-    pp.run(ast, f'out/algebraic_opt_{name}', view=True)
+    pp.run(ast, f'out/algebraic_opt_{name}', view=False)
