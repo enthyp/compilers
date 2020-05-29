@@ -242,17 +242,19 @@ class InOutBuilder(BaseVisitor):
 
     """
 
-    def __init__(self, gen, kill):
+    def __init__(self):
         self.in_sets = {}
         self.out_sets = {}
-        self.gen = gen
-        self.kill = kill
+        self.gen = None
+        self.kill = None
 
     def reset(self):
         self.in_sets = {}
         self.out_sets = {}
 
     def run(self, statements):
+        self.gen, self.kill = GenKillBuilder().run(statements)
+
         self.in_sets[TOP] = set()
         self.out_sets[TOP] = self.visit_statements(statements, self.in_sets[TOP])
         return self.in_sets, self.out_sets

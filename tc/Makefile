@@ -1,5 +1,6 @@
 ROOT_DIR := $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
 TEST_DIR := $(ROOT_DIR)/tests
+TEST_SET := $(if $(SET),$(TEST_DIR)/test_$(SET).py,$(TEST_DIR))
 
 .PHONY: all
 all: test
@@ -10,7 +11,7 @@ install:
 
 .PHONY: test
 test:
-	pytest -s --log-cli-level=1 $(TEST_DIR)
+	pytest -s --log-cli-level=1 $(TEST_SET)
 
 .PHONY: tar_tc
 tar_tc:

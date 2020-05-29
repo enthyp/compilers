@@ -3,7 +3,7 @@ import pytest
 from tc.common import PrettyPrinter
 from tc.interpreter import Interpreter
 from tc.parser import Parser
-from tc.optimization import AlgebraicOptimizer, ExpressionDAGOptimizer, RedundancyOptimizer
+from tc.optimization import AlgebraicOptimizer, ExpressionDAGOptimizer, InOutBuilder, RedundancyOptimizer
 from tc.resolver import Resolver
 
 
@@ -109,11 +109,15 @@ redundancy_test_programs = [
 @pytest.mark.parametrize('test_input, name', redundancy_test_programs)
 def test_redundancy_optimizations(test_input, name):
     parser = Parser()
-    resolver = Resolver()
-    optimizer = RedundancyOptimizer()
-
     ast = parser.run(test_input)
+
+    resolver = Resolver()
     resolver.run(ast)
+
+    io_build = InOutBuilder()
+    in_sets, out_sets = io_build.run(ast)
+
+    optimizer = RedundancyOptimizer(in_sets)
     ast = optimizer.run(ast)
 
     pp = PrettyPrinter()
@@ -144,35 +148,39 @@ common_subexpression_test_programs = [
         """,
         'a-d_overwrite'
     ),
-    (
-        """
-            var i : int = 1;
-            var x : bool = i < 10;
-            
-            while (i < 10) {
-                x = i < 10;
-                var tmp : int = i * -1;
-                i = i + 2;
-                print tmp
-            }
-        """,
-        'i_loop'
-    )
+    # (
+    #     """
+    #         var i : int = 1;
+    #         var x : bool = i < 10;
+    #
+    #         while (i < 10) {
+    #             x = i < 10;
+    #             var tmp : int = i * -1;
+    #             i = i + 2;
+    #             print tmp
+    #         }
+    #     """,
+    #     'i_loop'
+    # )
 ]
 
 
 @pytest.mark.parametrize('test_input, name', common_subexpression_test_programs)
 def test_cs_optimizations(test_input, name):
     parser = Parser()
-    resolver = Resolver()
-    optimizer = ExpressionDAGOptimizer()  # TODO: i_loop
-
     ast = parser.run(test_input)
+
+    resolver = Resolver()
     resolver.run(ast)
+
+    io_build = InOutBuilder()
+    in_sets, out_sets = io_build.run(ast)
+
+    optimizer = ExpressionDAGOptimizer(in_sets)
     ast = optimizer.run(ast)
 
     pp = PrettyPrinter()
-    pp.run(ast, f'out/common_subexpr_opt_{name}', view=False)
+    pp.run(ast, f'out/common_subexpr_opt_{name}', view=True)
 
 
 algebraic_test_programs = [

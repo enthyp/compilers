@@ -440,23 +440,20 @@ class FollowConditions(BaseVisitor):
 class RedundancyOptimizer(BaseVisitor):
     """Removes all subtrees of input AST that do not contain effective nodes."""
 
-    def __init__(self):
+    def __init__(self, in_sets):
+        self.in_sets = in_sets
         self.effective_nodes = None
 
     def reset(self):
         self.effective_nodes = None
 
     def run(self, statements):
-        # Build IN and OUT sets
-        gen, kill = GenKillBuilder().run(statements)
-        in_sets, out_sets = InOutBuilder(gen, kill).run(statements)
-
         # Find all effective nodes of the AST
         effective_top_level, call_fun_info = FindEffectiveStatements().run(statements)
-        self.effective_nodes = FollowUseDef(in_sets, effective_top_level, call_fun_info).run(statements)
+        self.effective_nodes = FollowUseDef(self.in_sets, effective_top_level, call_fun_info).run(statements)
 
         ExtendEffective(self.effective_nodes).run(statements)
-        FollowConditions(in_sets, self.effective_nodes).run(statements)
+        FollowConditions(self.in_sets, self.effective_nodes).run(statements)
 
         # Prune redundant nodes
         return self.visit_statements(statements)
