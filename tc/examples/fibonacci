@@ -1,0 +1,17 @@
+var n : int = 10;
+
+def fib(n : int) : int {
+    var a : int = 1;
+    var b : int = 1;
+    var i : int = 1;
+    while (i < n) {
+        print b;
+        var tmp : int = a;
+        a = b;
+        b = tmp + b;
+        i = i + 1
+    }
+    return b
+}
+
+print fib(n)

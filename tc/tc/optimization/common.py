@@ -140,6 +140,7 @@ class GenKillBuilder(BaseVisitor):
             self.kill[node] = set()
 
     def visit_function_def(self, node):
+        self.scopes[-1][node.name] = (set(), set())
         self.visit(node.body)
         self.gen[node] = set()
         self.kill[node] = set()

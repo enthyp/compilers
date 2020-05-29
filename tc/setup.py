@@ -5,7 +5,7 @@ setup(
     packages=find_packages(),
     entry_points={
         "console_scripts": [
-            'tc-repl=tc.__main__:repl',
+            'tisi=tc.__main__:main',
         ]
     },
 )

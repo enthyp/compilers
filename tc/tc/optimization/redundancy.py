@@ -227,6 +227,11 @@ class FollowUseDef(BaseVisitor):
         self.visit(node.expr)
 
     def visit_call(self, node):
+        if node in self.followed:
+            return
+        else:
+            self.followed.add(node)
+
         if self.follows or node in self.effective_nodes:
             for a in node.args:
                 self.visit(a)

@@ -1,4 +1,5 @@
 import re
+import sys
 from tc import Interpreter
 
 
@@ -26,5 +27,19 @@ def repl():
         code = ''
 
 
+def interpret(input_str):
+    interpreter = Interpreter()
+    interpreter.run(input_str, opt=True)
+
+
+def main():
+    if len(sys.argv) == 1:
+        repl()
+    else:
+        file = sys.argv[1]
+        with open(file, 'r') as input_f:
+            interpret(input_f.read())
+
+
 if __name__ == '__main__':
-    repl()
+    main()

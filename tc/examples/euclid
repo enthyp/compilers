@@ -1,0 +1,13 @@
+def gcd(a: int, b: int): int {
+    if (a < b) {
+        var tmp: int = a;
+        a = b;
+        b = tmp;
+    }
+    if (b == 0) {
+        return a;
+    }
+    return gcd(b, a % b)
+}
+
+print 'GCD(14, 21) = ' + tostring(gcd(14, 21))

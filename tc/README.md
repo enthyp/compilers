@@ -46,9 +46,21 @@ def test_call():
     interpreter.run(fibonacci)
 ```
 
-Once `tc` is installed one can enter REPL with `tc-repl` command
+### HOW TO
+ * `make install` to install into local env
+ * `make test` to run all required test cases
+ * once installed command `tisi` enters REPL, `tisi filename` executes code from given file
 
-### HOWTO
-`make install` to install into local env
-
-`make test` to run all required test cases
+### Features
+* strong typing
+* variable and function definitions
+* proper name scoping
+* lexical closures
+* some optimizations: 
+  * redundant code removal and reusing common
+  subexpressions based on reaching definitions 
+  * trivial algebraic optimizations
+  
+### Missing
+* error handling sucks
+* ...
