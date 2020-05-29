@@ -2,6 +2,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from tc.common import BaseVisitor
 from tc.globals import global_env
+from tc.parser import Assignment
 
 global_functions = global_env().functions.keys()
 
@@ -85,7 +86,7 @@ class GenKillBuilder(BaseVisitor):
 
     def reset(self):
         self.var_defs = defaultdict(set)
-        self.scopes = [{f: (set(), set()) for f in global_functions}]
+        self.scopes = [{f: (set(), set(), None) for f in global_functions}]
         self.gen = {}
         self.kill = {}
 
@@ -140,7 +141,7 @@ class GenKillBuilder(BaseVisitor):
             self.kill[node] = set()
 
     def visit_function_def(self, node):
-        self.scopes[-1][node.name] = (set(), set())
+        self.scopes[-1][node.name] = (set(), set(), node)
         self.visit(node.body)
         self.gen[node] = set()
         self.kill[node] = set()
@@ -149,7 +150,7 @@ class GenKillBuilder(BaseVisitor):
         gen = {node for node in self.gen[node.body] if node.name not in p_names}
         kill = {node for node in self.kill[node.body] if node.name not in p_names}
 
-        self.scopes[-1][node.name] = (gen, kill)  # GEN and KILL for function calls
+        self.scopes[-1][node.name] = (gen, kill, node)  # GEN and KILL for function calls
 
     def visit_variable_declaration(self, node):
         if node.value:
@@ -219,7 +220,8 @@ class GenKillBuilder(BaseVisitor):
 
     def visit_call(self, node):
         gen, kill = self.visit_statements(node.args)
-        f_gen, f_kill = self.resolve(node.name)
+        f_gen, f_kill, def_node = self.resolve(node.name)
+        node.def_node = def_node
         self.gen[node] = f_gen | (gen - f_kill)
         self.kill[node] = f_kill | (kill - f_gen)
 
@@ -357,6 +359,20 @@ class InOutBuilder(BaseVisitor):
     def visit_call(self, node):
         self.visit_statements(node.args, self.in_sets[node])
         self.transfer(node)
+
+        # Revisit function - data dependency via closure
+        # I.e. assignment to closure variable after function definition is an IN to the function body!
+        def_in = self.in_sets[node.def_node]
+        in_update = set()
+        potential_in = {n for n in self.in_sets[node] if isinstance(n, Assignment)}
+
+        for assignment_node in potential_in:
+            kills = self.kill[assignment_node]
+            if kills & def_in:
+                in_update.add(assignment_node)
+
+        def_in.update(in_update)
+        self.visit(node.def_node)
 
     def visit_variable(self, node):
         self.transfer(node)

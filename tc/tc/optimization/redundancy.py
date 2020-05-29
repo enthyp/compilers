@@ -190,17 +190,18 @@ class FollowUseDef(BaseVisitor):
             self.effective_nodes.add(node)
 
     def visit_assignment(self, node):
-        # No matter what, a variable must be declared!
-        with self.following():
-            in_set = self.in_sets[node]
-            for n in in_set:
-                if n.name == node.name and isinstance(n, VariableDeclaration):
-                    self.visit(n)
-
         self.visit(node.value)
 
         if self.follows:
             self.effective_nodes.add(node)
+
+            # No matter what, a variable must be declared!
+            with self.following():
+                in_set = self.in_sets[node]
+                for n in in_set:
+                    if n.name == node.name and isinstance(n, VariableDeclaration):
+                        self.visit(n)
+
 
     def visit_if_stmt(self, node):
         self.visit(node.condition)

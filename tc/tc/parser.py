@@ -42,7 +42,7 @@ class Call:
     scope_depth: int = None
 
     def __hash__(self):
-        return hash((hash(self.name), hash(self.scope_depth)))
+        return id(self)
 
 
 class ForStmt:

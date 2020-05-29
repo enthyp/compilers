@@ -112,11 +112,28 @@ redundancy_test_programs = [
                 y = x + 1;
                 x = y;
             }
-            
+
             print x;
             assert x == 10
         """,
         'retain_declarations'
+    ),
+    (
+        """
+        var a : string = "global";
+        {
+          def showA() {
+            print a;
+          }
+        
+          showA();
+          a = "reassigned";
+          showA();
+          var a : string = "block";
+          showA();
+        }
+        """,
+        'closure_dependency'
     )
 ]
 
