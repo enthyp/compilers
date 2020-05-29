@@ -148,20 +148,32 @@ common_subexpression_test_programs = [
         """,
         'a-d_overwrite'
     ),
-    # (
-    #     """
-    #         var i : int = 1;
-    #         var x : bool = i < 10;
-    #
-    #         while (i < 10) {
-    #             x = i < 10;
-    #             var tmp : int = i * -1;
-    #             i = i + 2;
-    #             print tmp
-    #         }
-    #     """,
-    #     'i_loop'
-    # )
+    (
+        """
+            var i : int = 1;
+            var x : bool = 7;
+            var y : int = x - 2;
+    
+            while (i < x - 2) {
+                i = i + 2;
+            }
+        """,
+        'cond_loop'
+    ),
+    (
+        """
+            var i : int = 1;
+            var x : bool = i < 10;
+
+            while (i < 10) {
+                x = i < 10;
+                var tmp : int = i * -1;
+                i = i + 2;
+                print tmp
+            }
+        """,
+        'i_loop'
+    )
 ]
 
 

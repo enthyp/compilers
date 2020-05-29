@@ -1,4 +1,5 @@
 from tc.common import BaseVisitor
+import logging
 
 
 class ExpressionDAGOptimizer(BaseVisitor):
@@ -50,7 +51,7 @@ class ExpressionDAGOptimizer(BaseVisitor):
     def visit_binary_expr(self, node, parent, parent_attr):
         l_key = self.visit(node.left, node, 'left')
         r_key = self.visit(node.right, node, 'right')
-        if not (l_key and r_key):
+        if l_key is None or r_key is None:
             return None
 
         cur_key = (l_key, r_key, node.op)
@@ -65,7 +66,7 @@ class ExpressionDAGOptimizer(BaseVisitor):
 
     def visit_unary_expr(self, node, parent, parent_attr):
         key = self.visit(node.expr, node, 'expr')
-        if not key:
+        if key is None:
             return None
 
         cur_key = (key, node.op)
@@ -89,10 +90,10 @@ class ExpressionDAGOptimizer(BaseVisitor):
 
     def visit_variable(self, node, *args):
         in_set = self.in_sets[node]
-        if len(in_set) == 1:
-            reach_def = next(iter(in_set))
-            import logging
-            logging.warning('IN')
+        reach_defs = {reach_def for reach_def in in_set if reach_def.name == node.name}
+
+        if len(reach_defs) == 1:
+            reach_def = next(iter(reach_defs))
             return id(reach_def)  # dumb hashing
         else:
             # More reaching definitions - can't reliably share variables in expressions
