@@ -17,7 +17,7 @@ def repl():
                 break
             if not s.strip():
                 continue
-               
+
             code += s.strip()
             if not re.match(r'\s', s[-1]):
                 break
@@ -28,4 +28,3 @@ def repl():
 
 if __name__ == '__main__':
     repl()
-

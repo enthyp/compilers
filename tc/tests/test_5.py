@@ -179,8 +179,10 @@ algebraic_test_programs = [
     (
         """
             var x: int = 1 + 0;
-            x = x * 1 / 1;
-            2 ^ 1;
+            x = x * 1;
+            x = 0 + x;
+            x = x ** 1;
+            x = 1 - 0
         """,
         'simple'
     )
