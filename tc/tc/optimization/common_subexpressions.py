@@ -87,7 +87,7 @@ class ExpressionDAGOptimizer(BaseVisitor):
     def visit_return_stmt(self, node):
         self.visit(node.expr)
 
-    def visit_call(self):
+    def visit_call(self, node):
         # Unknown side-effects - prevent optimization
         return None
 
