@@ -98,28 +98,26 @@ class Evaluator(BaseVisitor):
         self.env = self.env.enclosing
 
     def visit_binary_expr(self, node):
-        caching = getattr(node, 'caching', None)
-        if caching and node.cache is not None:
-            return node.cache
+        if hasattr(node, 'common_node'):
+            return node.common_node.cache
 
         op = self.operators[node.op]
         lval = self.visit(node.left)
         rval = self.visit(node.right)
         value = op(lval, rval)
 
-        if caching:
+        if hasattr(node, 'cache'):
             node.cache = value
         return value
 
     def visit_unary_expr(self, node):
-        caching = getattr(node, 'caching', None)
-        if caching and node.cache is not None:
-            return node.cache
+        if hasattr(node, 'common_node'):
+            return node.common_node.cache
 
         op = self.unary_operators[node.op]
         value = op(self.visit(node.expr))
 
-        if caching:
+        if hasattr(node, 'cache'):
             node.cache = value
         return value
 
@@ -167,11 +165,10 @@ class Interpreter:
         if opt:
             in_sets, out_sets = InOutBuilder().run(ast)
             redundancy_optimizer = RedundancyOptimizer(in_sets)
-            cs_optimizer = ExpressionDAGOptimizer(in_sets)
             alg_optimizer = AlgebraicOptimizer()
+            cs_optimizer = ExpressionDAGOptimizer(in_sets)
 
             ast = redundancy_optimizer.run(ast)
-            ast = cs_optimizer.run(ast)
             ast = alg_optimizer.run(ast)
+            ast = cs_optimizer.run(ast)
         self.eval.run(ast)
-        self.reset()

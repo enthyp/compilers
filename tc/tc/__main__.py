@@ -1,3 +1,4 @@
+import logging
 import re
 import sys
 from tc import Interpreter
@@ -6,25 +7,32 @@ from tc import Interpreter
 def repl():
     interpreter = Interpreter()
 
-    while True:
-        # Read program from input.
-        code = ''
+    try:
         while True:
+            # Read program from input.
+            code = ''
+
             try:
-                prompt = 'calc> ' if not code else '... '
-                s = input(prompt)
-            except EOFError:
-                print('EOF')
-                break
-            if not s.strip():
-                continue
+                while True:
+                    try:
+                        prompt = 'calc> ' if not code else '... '
+                        s = input(prompt)
+                    except EOFError:
+                        print('EOF')
+                        break
+                    if not s.strip():
+                        continue
 
-            code += s.strip()
-            if not re.match(r'\s', s[-1]):
-                break
+                    code += s.strip()
+                    if not re.match(r'\s', s[-1]):
+                        break
 
-        interpreter.run(code)
-        code = ''
+                interpreter.run(code)
+            except Exception as e:
+                logging.error(e)
+
+    except KeyboardInterrupt:
+        pass
 
 
 def interpret(input_str):

@@ -93,7 +93,7 @@ redundancy_test_programs = [
             var i : int = 1;
             var p : int = 1;
             var x : int = 2;
-            
+
             while (i < 10) {
                 print p;
                 p = p * 2;
@@ -103,6 +103,21 @@ redundancy_test_programs = [
         """,
         'unused_loop_variable'
     ),
+    (
+        """
+            var x : int = 1;
+            var y : int = 2;
+            while (x < 10) {
+                var z : int = x + 1;
+                y = x + 1;
+                x = y;
+            }
+            
+            print x;
+            assert x == 10
+        """,
+        'retain_declarations'
+    )
 ]
 
 
@@ -153,7 +168,7 @@ common_subexpression_test_programs = [
             var i : int = 1;
             var x : bool = 7;
             var y : int = x - 2;
-    
+
             while (i < x - 2) {
                 i = i + 2;
             }

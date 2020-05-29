@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 from tc.common import BaseVisitor
-from tc.optimization.common import GenKillBuilder, InOutBuilder
+from tc.parser import VariableDeclaration
 from tc.globals import global_env
 
 global_functions = global_env().functions.keys()
@@ -190,6 +190,13 @@ class FollowUseDef(BaseVisitor):
             self.effective_nodes.add(node)
 
     def visit_assignment(self, node):
+        # No matter what, a variable must be declared!
+        with self.following():
+            in_set = self.in_sets[node]
+            for n in in_set:
+                if n.name == node.name and isinstance(n, VariableDeclaration):
+                    self.visit(n)
+
         self.visit(node.value)
 
         if self.follows:

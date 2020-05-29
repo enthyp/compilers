@@ -168,10 +168,17 @@ class PrettyPrinter(BaseVisitor):
         return self.add_viz_node(node, 'for', ['initializer', 'condition', 'increment', 'body'])
 
     def visit_binary_expr(self, node):
+        if hasattr(node, 'common_node'):
+            node = node.common_node
         return self.add_viz_node(node, node.op, ['left', 'right'])
 
     def visit_unary_expr(self, node):
+        if hasattr(node, 'common_node'):
+            node = node.common_node
         return self.add_viz_node(node, node.op, ['expr'])
+
+    def visit_assert_stmt(self, node):
+        return self.add_viz_node(node, 'assert', ['expr'])
 
     def visit_return_stmt(self, node):
         return self.add_viz_node(node, 'return', ['expr'])
@@ -205,4 +212,3 @@ class PrettyPrinter(BaseVisitor):
             else:
                 self.graph.edge(n_id, self.visit(field), label='')
         return n_id
-
