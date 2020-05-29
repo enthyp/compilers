@@ -61,6 +61,6 @@ def test_call():
   subexpressions based on reaching definitions 
   * trivial algebraic optimizations
   
-### Missing
+### Problems
 * error handling sucks
-* ...
+* optimizations based on reaching definitions work most of the time but some corner cases have gone unhandled probably
