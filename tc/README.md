@@ -40,10 +40,28 @@ fibonacci = """
     assert fib(n) == 89
 """
 
+nck = """
+# Newton symbol
+def nck(n : int, k : int) : int {
+    def factorial(k : int) : int {
+        if (k == 0) {
+            return 1;
+        }
+        return k * factorial(k - 1)
+    }
+    
+    var result : int = factorial(n) * factorial(k);
+    return toint(result / factorial(n - k))
+}
+
+assert nck(10, 4) == 120960
+"""
+
 def test_call():
     interpreter = Interpreter()
     interpreter.run(euclid)
     interpreter.run(fibonacci)
+    interpreter.run(nck)
 ```
 
 ### HOW TO
@@ -61,6 +79,6 @@ def test_call():
   subexpressions based on reaching definitions 
   * trivial algebraic optimizations
   
-### Missing
+### Problems
 * error handling sucks
-* ...
+* optimizations based on reaching definitions work most of the time but some corner cases have gone unhandled probably
