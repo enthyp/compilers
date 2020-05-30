@@ -80,7 +80,7 @@ class GenKillBuilder(BaseVisitor):
 
     def __init__(self):
         self.var_defs = defaultdict(set)
-        self.scopes = [{f: (set(), set()) for f in global_functions}]
+        self.scopes = [{f: (set(), set(), None) for f in global_functions}]
         self.gen = {}
         self.kill = {}
 
@@ -360,19 +360,20 @@ class InOutBuilder(BaseVisitor):
         self.visit_statements(node.args, self.in_sets[node])
         self.transfer(node)
 
-        # Revisit function - data dependency via closure
+        # Revisit user defined functions - data dependency via closure
         # I.e. assignment to closure variable after function definition is an IN to the function body!
-        def_in = self.in_sets[node.def_node]
-        in_update = set()
-        potential_in = {n for n in self.in_sets[node] if isinstance(n, Assignment)}
+        if node.def_node:
+            def_in = self.in_sets[node.def_node]
+            in_update = set()
+            potential_in = {n for n in self.in_sets[node] if isinstance(n, Assignment)}
 
-        for assignment_node in potential_in:
-            kills = self.kill[assignment_node]
-            if kills & def_in:
-                in_update.add(assignment_node)
+            for assignment_node in potential_in:
+                kills = self.kill[assignment_node]
+                if kills & def_in:
+                    in_update.add(assignment_node)
 
-        def_in.update(in_update)
-        self.visit(node.def_node)
+            def_in.update(in_update)
+            self.visit(node.def_node)
 
     def visit_variable(self, node):
         self.transfer(node)

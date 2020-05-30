@@ -125,7 +125,7 @@ redundancy_test_programs = [
           def showA() {
             print a;
           }
-        
+
           showA();
           a = "reassigned";
           showA();
@@ -134,6 +134,27 @@ redundancy_test_programs = [
         }
         """,
         'closure_dependency'
+    ),
+    (
+        """
+        def sideEffects() {
+            print "hello!";
+            return "hello"
+        }
+        var x : string = sideEffects()
+        """,
+        'non_redundant_call'
+    ),
+    (
+        """
+        var y : int = 4 + 9;
+        # var x : int = [3 7 + 3 4 5 * + - y -];
+        var x : int = 13 - y;
+        if (x == 0) {
+            print "((3 + 7) - (3 + 4 * 5)) == -13"
+        }
+        """,
+        'follow_condition_ud_chain'
     )
 ]
 
@@ -153,7 +174,7 @@ def test_redundancy_optimizations(test_input, name):
     ast = optimizer.run(ast)
 
     pp = PrettyPrinter()
-    pp.run(ast, f'out/redundancy_opt_{name}', view=False)
+    pp.run(ast, f'out/redundancy_opt_{name}', view=True)
 
 
 common_subexpression_test_programs = [

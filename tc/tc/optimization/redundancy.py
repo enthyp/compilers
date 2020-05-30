@@ -202,7 +202,6 @@ class FollowUseDef(BaseVisitor):
                     if n.name == node.name and isinstance(n, VariableDeclaration):
                         self.visit(n)
 
-
     def visit_if_stmt(self, node):
         self.visit(node.condition)
         self.visit(node.body)
@@ -312,14 +311,20 @@ class ExtendEffective(BaseVisitor):
                 self.effective_nodes.add(node.value)
                 self.visit(node.value)
             return True
-        return False
+        elif node.value and self.visit(node.value):
+            return True
+        else:
+            return False
 
     def visit_assignment(self, node):
         if node in self.effective_nodes:
             self.effective_nodes.add(node.value)
             self.visit(node.value)
             return True
-        return False
+        elif node.value and self.visit(node.value):
+            return True
+        else:
+            return False
 
     def visit_print_stmt(self, node):
         if node in self.effective_nodes:
@@ -391,15 +396,17 @@ class ExtendEffective(BaseVisitor):
         return False
 
     def visit_unknown(self, m_name):
-        return True
+        return False
 
 
 class FollowConditions(BaseVisitor):
     """For effective conditional blocks marks all definitions of condition variables as effective."""
 
-    def __init__(self, in_sets, effective_nodes):
+    def __init__(self, in_sets, effective_nodes, call_fun_info):
         self.in_sets = in_sets
         self.effective_nodes = effective_nodes
+        self.ud_follower = FollowUseDef(in_sets, effective_nodes, call_fun_info)
+        self.ud_follower.follow_cnt = 1  # ugly hack - the whole module needs a ground-up refactor
 
     def run(self, statements):
         self.visit_statements(statements)
@@ -419,18 +426,21 @@ class FollowConditions(BaseVisitor):
             definitions = self.visit(node.condition)
             for d in definitions:
                 self.effective_nodes.add(d)
+                self.ud_follower.visit(d)
 
     def visit_while_stmt(self, node):
         if node in self.effective_nodes:
             definitions = self.visit(node.condition)
             for d in definitions:
                 self.effective_nodes.add(d)
+                self.ud_follower.visit(d)
 
     def visit_for_stmt(self, node):
         if node in self.effective_nodes:
             definitions = self.visit(node.condition)
             for d in definitions:
                 self.effective_nodes.add(d)
+                self.ud_follower.visit(d)
 
     def visit_binary_expr(self, node):
         return self.visit(node.left) | self.visit(node.right)
@@ -464,9 +474,8 @@ class RedundancyOptimizer(BaseVisitor):
         # Find all effective nodes of the AST
         effective_top_level, call_fun_info = FindEffectiveStatements().run(statements)
         self.effective_nodes = FollowUseDef(self.in_sets, effective_top_level, call_fun_info).run(statements)
-
         ExtendEffective(self.effective_nodes).run(statements)
-        FollowConditions(self.in_sets, self.effective_nodes).run(statements)
+        FollowConditions(self.in_sets, self.effective_nodes, call_fun_info).run(statements)
 
         # Prune redundant nodes
         return self.visit_statements(statements)
