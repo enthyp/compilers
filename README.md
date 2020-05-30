@@ -3,7 +3,7 @@
 Interpreter for a simple language. 
 
 Features:
-* strong typing
+* static typing
 * variable and function definitions
 * proper name scoping
 * lexical closures
