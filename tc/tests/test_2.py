@@ -23,7 +23,11 @@ def test_operations_impl(test_input):
 
 
 semicolon_separated = [
-    'assert 1 == 1; assert 2 == 2'
+    'assert 1 == 1; assert 2 == 2',
+    """
+    assert 1 == 1; 
+    assert 2 == 2
+    """
 ]
 
 
@@ -47,7 +51,10 @@ def test_error_continuation(test_input):
 
 
 rpn = [
-    'assert [2 3 -] == -1'
+    'assert [2 3 -] == -1',
+    'assert [4 9 +] == 13',
+    'assert [3 7 + 3 4 5 * + -] == -13',
+    'assert [3 4 **] == 81'
 ]
 
 

@@ -19,4 +19,4 @@ tar_tc:
 
 .PHONY: zip_tc
 zip_tc:
-	zip -r jakub_lanecki_tc.zip tc examples tests -x "tests/.pytest_cache/*" "tests/__pycache__/*"  "tests/out/*" "tc/__pycache__/*" "tc/optimization/__pycache__/*" tc/parsetab.py
+	zip -r jakub_lanecki_tc.zip tc examples tests Makefile requirements.txt setup.py -x "tests/.pytest_cache/*" "tests/__pycache__/*"  "tests/out/*" "tc/__pycache__/*" "tc/optimization/__pycache__/*" tc/parsetab.py

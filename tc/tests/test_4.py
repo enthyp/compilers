@@ -6,14 +6,18 @@ logging.basicConfig(level=logging.INFO)
 
 
 function_def_program = """
-    def nothing() {}
+    def nothing() { print 'nothing' }
     def something(): string { return 'something' }
     def really_something(x: string): string {
         nothing();
         return something() + x;
     }
+    def two_things(thing1 : string, thing2 : string) : string {
+        return thing1 + ' ' + thing2 + ' things'
+    }
 
-    print really_something(' out of nothing')
+    print really_something(' out of nothing');
+    print two_things('two', 'more')
 """
 
 
@@ -91,10 +95,10 @@ function_call_programs = [
                 print 'Hello from inner scope, ' + name
             }
     
-            print fun(name);  # inner
+            fun(name);  # inner
         }
     
-        print fun(name)       # global
+        fun(name)       # global
     """
 ]
 

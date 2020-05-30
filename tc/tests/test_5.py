@@ -174,7 +174,7 @@ def test_redundancy_optimizations(test_input, name):
     ast = optimizer.run(ast)
 
     pp = PrettyPrinter()
-    pp.run(ast, f'out/redundancy_opt_{name}', view=True)
+    pp.run(ast, f'out/redundancy_opt_{name}', view=False)
 
 
 common_subexpression_test_programs = [
@@ -198,18 +198,23 @@ common_subexpression_test_programs = [
             b = a - d;
             c = b + c;
             d = a - d;
+            assert b == d;
+            assert b == -2;
+            assert c == 2;
         """,
         'a-d_overwrite'
     ),
     (
         """
             var i : int = 1;
-            var x : bool = 7;
+            var x : int = 7;
             var y : int = x - 2;
 
             while (i < x - 2) {
                 i = i + 2;
             }
+            assert i == y;
+            assert i == 5
         """,
         'cond_loop'
     ),
@@ -224,6 +229,7 @@ common_subexpression_test_programs = [
                 i = i + 2;
                 print tmp
             }
+            assert x
         """,
         'i_loop'
     )
@@ -246,6 +252,9 @@ def test_cs_optimizations(test_input, name):
 
     pp = PrettyPrinter()
     pp.run(ast, f'out/common_subexpr_opt_{name}', view=False)
+
+    interpreter = Interpreter()
+    interpreter.run(test_input, opt=True, red_opt=False)
 
 
 algebraic_test_programs = [

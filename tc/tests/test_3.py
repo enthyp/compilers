@@ -87,7 +87,7 @@ operator_overload_program = """
     assert x + 1 == 2;
 
     var y: string = "ala ma ";
-    assert y + "kota" == "ala ma kota"'
+    assert y + "kota" == "ala ma kota"
 """
 
 
@@ -113,6 +113,7 @@ def test_declarations_raised(test_input, error_msg):
 
 lvalue_checks = [
     'var x: int = 1; 2 = x; print x',
+    '3 ** 4 = 1',
 ]
 
 

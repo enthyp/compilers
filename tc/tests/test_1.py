@@ -43,7 +43,9 @@ def test_function_lexing(test_input, test_tokens):
 
 power_op = [
     'assert 2 ** 3 == 8',
-    'assert 2 ** 3 * 4 == 32'
+    'assert 2 ** 3 * 4 == 32',
+    'assert 2 ** -1 == 0.5',
+    'assert -2 ** 2 == 4'
 ]
 
 

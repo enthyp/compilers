@@ -158,7 +158,7 @@ class Interpreter:
         self.typecheck.reset()
         self.resolver.reset()
 
-    def run(self, program, opt=False):
+    def run(self, program, opt=False, red_opt=True):
         ast = self.parser.run(program)
         self.resolver.run(ast)
         self.typecheck.run(ast)
@@ -168,7 +168,8 @@ class Interpreter:
             alg_optimizer = AlgebraicOptimizer()
             cs_optimizer = ExpressionDAGOptimizer(in_sets)
 
-            ast = redundancy_optimizer.run(ast)
+            if red_opt:
+                ast = redundancy_optimizer.run(ast)
             ast = alg_optimizer.run(ast)
             ast = cs_optimizer.run(ast)
         self.eval.run(ast)
