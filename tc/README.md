@@ -70,7 +70,7 @@ def test_call():
  * once installed command `tisi` enters REPL, `tisi filename` executes code from given file
 
 ### Features
-* strong typing
+* static typing
 * variable and function definitions
 * proper name scoping
 * lexical closures
