@@ -81,4 +81,6 @@ def test_call():
   
 ### Problems
 * error handling sucks
-* optimizations based on reaching definitions work for tested cases but I have possibly skipped some corners
+* optimizations based on reaching definitions work for tested cases but I have likely skipped some
+* also, redundancy optimizer requires thorough refactoring to use a more established method (now it uses reaching definitions        
+  and a couple of custom visitors to handle different corners cases)
